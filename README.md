@@ -1,73 +1,55 @@
-# React + TypeScript + Vite
+# Local AI Chat
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**A private, offline desktop app for chatting with local AI models.**
+Everything runs on your machine — no cloud, no API keys, no data leaving your computer.
 
-Currently, two official plugins are available:
+![macOS](https://img.shields.io/badge/macOS-12%2B-blue?style=flat-square&logo=apple)
+![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+<p align="center">
+  <img src="docs/screenshot-chat.png" alt="Local AI Chat" width="800" />
+</p>
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Features
 
-## Expanding the ESLint configuration
+- **100% Private** — no cloud, no telemetry, everything runs locally on your Mac
+- **Multiple Models** — browse, download, and switch between AI models with smart RAM-based recommendations
+- **Chat Management** — multiple conversations with full history
+- **File Context** — attach local files and folders for the AI to reference
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Installation
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+1. Download the latest `.dmg` from [Releases](https://github.com/JoFaTech2508/local-ai-chat/releases)
+2. Open the `.dmg` and drag the app to Applications
+3. Launch the app — it handles everything else automatically
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Requirements
+
+- macOS 12 or later (Apple Silicon or Intel)
+- 8 GB RAM minimum (16 GB+ recommended for larger models)
+
+---
+
+## Development
+
+For contributors who want to build from source:
+
+```bash
+git clone https://github.com/JoFaTech2508/local-ai-chat.git
+cd local-ai-chat
+npm install
+npm run tauri dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Requires [Node.js](https://nodejs.org/) 18+ and [Rust](https://rustup.rs/) (latest stable).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+© 2025 JoFaTech2508
