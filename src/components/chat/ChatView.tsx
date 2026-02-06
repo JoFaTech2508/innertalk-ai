@@ -30,17 +30,16 @@ export function ChatView() {
     }, 800)
   }
 
-  // Empty state - no active chat
   if (!activeChat) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-bg-tertiary border border-border flex items-center justify-center">
-            <Bot size={32} className="text-text-muted" />
+      <div className="flex flex-col h-full bg-slate-950">
+        <div className="flex-1 flex flex-col items-center justify-center gap-5">
+          <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center">
+            <Bot size={28} className="text-slate-500" />
           </div>
           <div className="text-center">
-            <h2 className="text-lg font-medium text-text-primary mb-1">Local AI Chat</h2>
-            <p className="text-sm text-text-muted max-w-sm">
+            <h2 className="text-xl font-semibold text-white mb-2">Local AI Chat</h2>
+            <p className="text-sm text-slate-500 max-w-sm">
               Start a conversation with your local AI model. Everything runs on your machine.
             </p>
           </div>
@@ -49,7 +48,7 @@ export function ChatView() {
               const id = createChat(selectedModel)
               setActiveChat(id)
             }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white text-sm hover:bg-accent-hover transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-500 transition-colors"
           >
             <MessageSquarePlus size={16} />
             Start a new chat
@@ -61,15 +60,14 @@ export function ChatView() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Messages */}
+    <div className="flex flex-col h-full bg-slate-950">
       <div className="flex-1 overflow-y-auto">
         {activeChat.messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="w-12 h-12 rounded-xl bg-bg-tertiary border border-border flex items-center justify-center">
-              <Bot size={24} className="text-text-muted" />
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center">
+              <Bot size={22} className="text-slate-500" />
             </div>
-            <p className="text-sm text-text-muted">
+            <p className="text-sm text-slate-500">
               Send a message to start the conversation
             </p>
           </div>
@@ -83,7 +81,6 @@ export function ChatView() {
         )}
       </div>
 
-      {/* Input */}
       <ChatInput onSend={handleSend} />
     </div>
   )

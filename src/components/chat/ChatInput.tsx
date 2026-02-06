@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, ChevronDown } from 'lucide-react'
+import { Send, ChevronDown, Check } from 'lucide-react'
 import { useAppStore } from '../../stores/appStore'
 
 interface ChatInputProps {
@@ -38,10 +38,9 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   }
 
   return (
-    <div className="border-t border-border bg-bg-secondary p-4">
+    <div className="border-t border-slate-800 bg-slate-950 p-4">
       <div className="max-w-3xl mx-auto">
-        {/* Input Area */}
-        <div className="flex items-end gap-2 bg-bg-tertiary rounded-2xl border border-border p-2">
+        <div className="flex items-end gap-3 bg-slate-900 rounded-2xl border border-slate-800 p-3">
           <textarea
             ref={textareaRef}
             value={message}
@@ -50,23 +49,22 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             placeholder="Type a message..."
             rows={1}
             disabled={disabled}
-            className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-muted outline-none resize-none px-2 py-1.5 max-h-[150px]"
+            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 outline-none resize-none px-1 py-1 max-h-[150px]"
           />
           <button
             onClick={handleSubmit}
             disabled={!message.trim() || disabled}
-            className="p-2 rounded-xl bg-accent text-white hover:bg-accent-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
           >
             <Send size={16} />
           </button>
         </div>
 
-        {/* Model Selector */}
-        <div className="flex items-center justify-between mt-2 px-1">
+        <div className="flex items-center justify-between mt-2.5 px-1">
           <div className="relative">
             <button
               onClick={() => setShowModelPicker(!showModelPicker)}
-              className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
+              className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               {selectedModel}
@@ -76,7 +74,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
             {showModelPicker && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowModelPicker(false)} />
-                <div className="absolute bottom-full left-0 mb-2 bg-bg-tertiary border border-border rounded-lg shadow-xl py-1 min-w-[160px] z-20">
+                <div className="absolute bottom-full left-0 mb-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1.5 min-w-[180px] z-20">
                   {availableModels.map(model => (
                     <button
                       key={model}
@@ -84,20 +82,21 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
                         setSelectedModel(model)
                         setShowModelPicker(false)
                       }}
-                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
                         model === selectedModel
-                          ? 'text-accent bg-bg-active'
-                          : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover'
+                          ? 'text-indigo-400 bg-slate-800'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
                       }`}
                     >
                       {model}
+                      {model === selectedModel && <Check size={12} />}
                     </button>
                   ))}
                 </div>
               </>
             )}
           </div>
-          <span className="text-xs text-text-muted">
+          <span className="text-xs text-slate-600">
             Shift+Enter for new line
           </span>
         </div>
