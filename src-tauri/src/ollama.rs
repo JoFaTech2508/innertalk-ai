@@ -1,9 +1,14 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::ipc::Channel;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 const OLLAMA_BASE: &str = "http://localhost:11434";
+
+// ── Chat cancellation ───────────────────────────────────────────────
+
+pub struct ChatCancelFlag(pub AtomicBool);
 
 // ── Public types (sent to frontend) ──────────────────────────────────
 
@@ -156,10 +161,16 @@ pub async fn get_system_ram() -> Result<u64, String> {
 
 #[tauri::command]
 pub async fn chat(
+    app_handle: tauri::AppHandle,
     model: String,
     messages: Vec<ChatMessage>,
     on_event: Channel<StreamEvent>,
 ) -> Result<(), String> {
+    // Reset cancel flag at start
+    if let Some(flag) = app_handle.try_state::<ChatCancelFlag>() {
+        flag.0.store(false, Ordering::Relaxed);
+    }
+
     let client = reqwest::Client::new();
     let url = format!("{}/api/chat", OLLAMA_BASE);
 
@@ -182,20 +193,55 @@ pub async fn chat(
         return Err(format!("Ollama error ({status}): {text}"));
     }
 
-    read_ndjson_stream::<ChatChunk, _>(resp, |chunk| {
-        if chunk.done {
-            let _ = on_event.send(StreamEvent::Done {
-                total_duration: chunk.total_duration.unwrap_or(0),
-            });
-        } else if let Some(msg) = chunk.message {
-            if !msg.content.is_empty() {
-                let _ = on_event.send(StreamEvent::Token {
-                    content: msg.content,
-                });
+    // Stream with cancel checking
+    let mut stream = resp.bytes_stream();
+    let mut buffer = String::new();
+
+    while let Some(chunk) = stream.next().await {
+        // Check cancel flag
+        if let Some(flag) = app_handle.try_state::<ChatCancelFlag>() {
+            if flag.0.load(Ordering::Relaxed) {
+                let _ = on_event.send(StreamEvent::Done { total_duration: 0 });
+                return Ok(());
             }
         }
-    })
-    .await
+
+        let bytes = chunk.map_err(|e| e.to_string())?;
+        buffer.push_str(&String::from_utf8_lossy(&bytes));
+
+        while let Some(pos) = buffer.find('\n') {
+            let line = buffer[..pos].trim().to_string();
+            buffer = buffer[pos + 1..].to_string();
+
+            if line.is_empty() {
+                continue;
+            }
+
+            if let Ok(parsed) = serde_json::from_str::<ChatChunk>(&line) {
+                if parsed.done {
+                    let _ = on_event.send(StreamEvent::Done {
+                        total_duration: parsed.total_duration.unwrap_or(0),
+                    });
+                } else if let Some(msg) = parsed.message {
+                    if !msg.content.is_empty() {
+                        let _ = on_event.send(StreamEvent::Token {
+                            content: msg.content,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn cancel_chat(app_handle: tauri::AppHandle) -> Result<(), String> {
+    if let Some(flag) = app_handle.try_state::<ChatCancelFlag>() {
+        flag.0.store(true, Ordering::Relaxed);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -272,6 +318,7 @@ pub async fn delete_model(name: String) -> Result<(), String> {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StorageInfo {
     pub path: String,
     pub size_bytes: u64,
@@ -279,18 +326,101 @@ pub struct StorageInfo {
 
 #[tauri::command]
 pub fn get_storage_info(app_handle: tauri::AppHandle) -> Result<StorageInfo, String> {
-    let models_dir = app_handle
+    // First check app-bundled models dir
+    let app_models_dir = app_handle
         .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?
         .join("models");
 
-    let size = dir_size(&models_dir);
+    let app_size = dir_size(&app_models_dir);
+
+    if app_size > 0 {
+        return Ok(StorageInfo {
+            path: app_models_dir.to_string_lossy().to_string(),
+            size_bytes: app_size,
+        });
+    }
+
+    // Fall back to default Ollama models dir (~/.ollama/models)
+    if let Some(home) = dirs::home_dir() {
+        let default_dir = home.join(".ollama").join("models");
+        let size = dir_size(&default_dir);
+        return Ok(StorageInfo {
+            path: default_dir.to_string_lossy().to_string(),
+            size_bytes: size,
+        });
+    }
 
     Ok(StorageInfo {
-        path: models_dir.to_string_lossy().to_string(),
-        size_bytes: size,
+        path: app_models_dir.to_string_lossy().to_string(),
+        size_bytes: 0,
     })
+}
+
+#[tauri::command]
+pub fn read_file_content(path: String) -> Result<String, String> {
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("Cannot read file: {e}"))?;
+
+    if metadata.len() > 10 * 1024 * 1024 {
+        return Err("File too large (max 10 MB)".to_string());
+    }
+
+    std::fs::read_to_string(&path)
+        .map_err(|e| format!("Cannot read file: {e}"))
+}
+
+#[derive(Debug, Serialize)]
+pub struct FolderFile {
+    pub name: String,
+    pub path: String,
+    pub content: String,
+}
+
+#[tauri::command]
+pub fn read_folder_files(path: String) -> Result<Vec<FolderFile>, String> {
+    let text_extensions = [
+        "txt", "md", "json", "csv", "xml", "yaml", "yml", "toml", "ini", "cfg", "log",
+        "js", "ts", "tsx", "jsx", "py", "rs", "go", "java", "c", "cpp", "h", "hpp",
+        "css", "html", "sql", "sh", "bash", "zsh", "swift", "kt", "rb", "php",
+        "env", "gitignore", "dockerfile", "makefile",
+    ];
+
+    let mut files = Vec::new();
+    collect_text_files(std::path::Path::new(&path), &text_extensions, &mut files, 0);
+    Ok(files)
+}
+
+fn collect_text_files(dir: &std::path::Path, exts: &[&str], out: &mut Vec<FolderFile>, depth: usize) {
+    if depth > 5 { return; }
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.starts_with('.') || name == "node_modules" || name == "target" || name == "dist" {
+            continue;
+        }
+        if path.is_dir() {
+            collect_text_files(&path, exts, out, depth + 1);
+        } else if let Ok(meta) = entry.metadata() {
+            if meta.len() > 1024 * 1024 { continue; } // skip files > 1MB
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            let fname = name.to_lowercase();
+            if exts.iter().any(|e| *e == ext.to_lowercase()) || fname == "makefile" || fname == "dockerfile" {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    out.push(FolderFile {
+                        name: path.strip_prefix(dir.parent().unwrap_or(dir))
+                            .unwrap_or(&path)
+                            .to_string_lossy()
+                            .to_string(),
+                        path: path.to_string_lossy().to_string(),
+                        content,
+                    });
+                }
+            }
+        }
+    }
 }
 
 fn dir_size(path: &std::path::Path) -> u64 {
@@ -308,4 +438,51 @@ fn dir_size(path: &std::path::Path) -> u64 {
         }
     }
     total
+}
+
+// ── File watching ───────────────────────────────────────────────────
+
+use notify::RecursiveMode;
+use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::Duration;
+
+pub struct FolderWatchers(pub Mutex<HashMap<String, notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>>>);
+
+#[tauri::command]
+pub fn watch_folder(app_handle: tauri::AppHandle, path: String) -> Result<(), String> {
+    let watchers_state = app_handle.state::<FolderWatchers>();
+    let mut watchers = watchers_state.0.lock().map_err(|e| e.to_string())?;
+
+    // Already watching
+    if watchers.contains_key(&path) {
+        return Ok(());
+    }
+
+    let app = app_handle.clone();
+    let watch_path = path.clone();
+
+    let mut debouncer = new_debouncer(Duration::from_secs(2), move |events: Result<Vec<notify_debouncer_mini::DebouncedEvent>, notify::Error>| {
+        if let Ok(events) = events {
+            let has_changes = events.iter().any(|e| matches!(e.kind, DebouncedEventKind::Any));
+            if has_changes {
+                let _ = app.emit("folder-changed", &watch_path);
+            }
+        }
+    }).map_err(|e| format!("Failed to create watcher: {e}"))?;
+
+    debouncer.watcher().watch(std::path::Path::new(&path), RecursiveMode::Recursive)
+        .map_err(|e| format!("Failed to watch folder: {e}"))?;
+
+    watchers.insert(path, debouncer);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn unwatch_folder(app_handle: tauri::AppHandle, path: String) -> Result<(), String> {
+    let watchers_state = app_handle.state::<FolderWatchers>();
+    let mut watchers = watchers_state.0.lock().map_err(|e| e.to_string())?;
+    watchers.remove(&path);
+    Ok(())
 }

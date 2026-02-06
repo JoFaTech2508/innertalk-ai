@@ -1,4 +1,4 @@
-import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick, Loader2, TriangleAlert, FolderOpen } from 'lucide-react'
+import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick, Loader2, TriangleAlert } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { pullModel, deleteModel, listModels, getStorageInfo } from '../../lib/ollama'
@@ -47,13 +47,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [deletingModel, setDeletingModel] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [showAllModels, setShowAllModels] = useState(false)
-  const [storagePath, setStoragePath] = useState('')
   const [storageSize, setStorageSize] = useState(0)
 
   const refreshStorage = async () => {
     try {
       const info = await getStorageInfo()
-      setStoragePath(info.path)
       setStorageSize(info.sizeBytes)
     } catch { /* ignore */ }
   }
@@ -160,32 +158,26 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         <div className="flex-1 overflow-y-auto" style={{ padding: '28px' }}>
 
           {/* System info */}
-          <div className="flex flex-col rounded-xl ring-1 ring-white/[0.06]" style={{ marginBottom: 28, background: 'rgba(255,255,255,0.02)' }}>
-            <div className="flex items-center flex-wrap" style={{ padding: '14px 18px', gap: 10 }}>
-              <MemoryStick size={15} className="text-slate-500" />
-              <span className="text-xs text-slate-400">RAM</span>
-              <span className="text-xs font-semibold text-white">{ramGB} GB</span>
-              <span className="text-[10px] text-slate-500">&middot;</span>
-              <span className="text-xs text-slate-500">Models up to ~{ramGB <= 8 ? '4B' : ramGB <= 16 ? '10B' : ramGB <= 32 ? '20B' : '70B'} recommended</span>
-              <span className="text-[10px] text-slate-500">&middot;</span>
-              <span className={`text-xs font-medium ${ollamaStatus === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {ollamaStatus === 'connected' ? 'Ollama running' : 'Ollama offline'}
-              </span>
-            </div>
-            <div className="border-t border-white/[0.04]" />
-            <div className="flex items-center" style={{ padding: '12px 18px', gap: 10 }}>
-              <FolderOpen size={15} className="text-slate-500" />
-              <span className="text-xs text-slate-400">Storage</span>
-              <span className="text-xs font-semibold text-white">{storageSize > 0 ? formatSize(storageSize) : 'Empty'}</span>
-              {storagePath && (
-                <>
-                  <span className="text-[10px] text-slate-500">&middot;</span>
-                  <span className="text-[11px] text-slate-600 truncate" title={storagePath}>
-                    {storagePath.replace(/^\/Users\/[^/]+/, '~')}
-                  </span>
-                </>
-              )}
-            </div>
+          <div
+            className="flex items-center flex-wrap rounded-xl ring-1 ring-white/[0.06]"
+            style={{ padding: '14px 18px', gap: 10, marginBottom: 28, background: 'rgba(255,255,255,0.02)' }}
+          >
+            <MemoryStick size={15} className="text-slate-500" />
+            <span className="text-xs text-slate-400">RAM</span>
+            <span className="text-xs font-semibold text-white">{ramGB} GB</span>
+            <span className="text-[10px] text-slate-500">&middot;</span>
+            <span className="text-xs text-slate-500">Up to ~{ramGB <= 8 ? '4B' : ramGB <= 16 ? '10B' : ramGB <= 32 ? '20B' : '70B'} recommended</span>
+            <span className="text-[10px] text-slate-500">&middot;</span>
+            <span className={`text-xs font-medium ${ollamaStatus === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {ollamaStatus === 'connected' ? 'Ollama running' : 'Ollama offline'}
+            </span>
+            {availableModels.length > 0 && storageSize > 0 && (
+              <>
+                <span className="text-[10px] text-slate-500">&middot;</span>
+                <HardDrive size={13} className="text-slate-500" />
+                <span className="text-xs text-slate-500">{formatSize(storageSize)} used</span>
+              </>
+            )}
           </div>
 
           {/* Downloaded Models Section */}

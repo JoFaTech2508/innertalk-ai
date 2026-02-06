@@ -1,9 +1,16 @@
 import { create } from 'zustand'
 
+export interface Attachment {
+  name: string
+  path: string
+  content: string
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  attachments?: Attachment[]
   timestamp: number
 }
 
@@ -23,7 +30,7 @@ interface ChatState {
   createChat: (model: string) => string
   deleteChat: (id: string) => void
   setActiveChat: (id: string) => void
-  addMessage: (chatId: string, role: 'user' | 'assistant', content: string) => void
+  addMessage: (chatId: string, role: 'user' | 'assistant', content: string, attachments?: Attachment[]) => void
   updateLastMessage: (chatId: string, content: string) => void
 }
 
@@ -68,7 +75,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ activeChatId: id })
   },
 
-  addMessage: (chatId: string, role: 'user' | 'assistant', content: string) => {
+  addMessage: (chatId: string, role: 'user' | 'assistant', content: string, attachments?: Attachment[]) => {
     set(state => ({
       chats: state.chats.map(chat =>
         chat.id === chatId
@@ -78,6 +85,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 id: generateId(),
                 role,
                 content,
+                ...(attachments?.length ? { attachments } : {}),
                 timestamp: Date.now(),
               }],
               title: chat.messages.length === 0 && role === 'user'

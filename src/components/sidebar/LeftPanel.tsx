@@ -2,6 +2,7 @@ import { MessageSquare, FolderOpen, Plus, Trash2, Cpu } from 'lucide-react'
 import { FilesPanel } from '../files/FilesPanel'
 import { useChatStore } from '../../stores/chatStore'
 import { useAppStore } from '../../stores/appStore'
+import { cancelChat } from '../../lib/ollama'
 
 function ChatsTab() {
   const { chats, activeChatId, createChat, deleteChat, setActiveChat } = useChatStore()
@@ -72,6 +73,7 @@ function ChatsTab() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
+                    cancelChat().catch(() => {})
                     deleteChat(chat.id)
                   }}
                   className="opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-md hover:bg-white/[0.06] transition-all text-slate-500 hover:text-red-400 shrink-0"

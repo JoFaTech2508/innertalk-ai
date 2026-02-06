@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, User, Send, Paperclip, Loader2 } from 'lucide-react'
+import { Bot, User, Send, Paperclip, Loader2, X, FileText, Square } from 'lucide-react'
 import Markdown from 'react-markdown'
+import { open } from '@tauri-apps/plugin-dialog'
 import { useChatStore } from '../../stores/chatStore'
 import { useAppStore } from '../../stores/appStore'
-import { chat as ollamaChat } from '../../lib/ollama'
-import type { Message } from '../../stores/chatStore'
+import { chat as ollamaChat, cancelChat, readFileContent } from '../../lib/ollama'
+import type { Message, Attachment } from '../../stores/chatStore'
 
 function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === 'user'
@@ -35,6 +36,20 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
         >
           {isUser ? 'You' : 'AI Assistant'}
         </p>
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 8 }}>
+            {message.attachments.map((att, i) => (
+              <span
+                key={i}
+                className="flex items-center text-xs text-indigo-300 bg-indigo-500/10 rounded-lg ring-1 ring-indigo-500/20"
+                style={{ padding: '4px 10px', gap: 6 }}
+              >
+                <FileText size={12} />
+                {att.name}
+              </span>
+            ))}
+          </div>
+        )}
         {message.content ? (
           <div className="text-[15px] leading-relaxed text-slate-200 prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2 prose-code:text-indigo-300 prose-strong:text-white prose-a:text-indigo-400">
             <Markdown>{message.content}</Markdown>
@@ -52,13 +67,45 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
 
 export function ChatPanel() {
   const { chats, activeChatId, createChat, setActiveChat, addMessage, updateLastMessage } = useChatStore()
-  const { selectedModel, setSidebarTab, ollamaStatus } = useAppStore()
+  const { selectedModel, setSidebarTab, ollamaStatus, contextFolders } = useAppStore()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
 
   const activeChat = chats.find(c => c.id === activeChatId)
+
+  const handleAttach = async () => {
+    try {
+      const selected = await open({
+        multiple: true,
+        filters: [
+          { name: 'Text files', extensions: ['txt', 'md', 'json', 'csv', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'log'] },
+          { name: 'Code', extensions: ['js', 'ts', 'tsx', 'jsx', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'css', 'html', 'sql', 'sh'] },
+          { name: 'All files', extensions: ['*'] },
+        ],
+      })
+      if (!selected) return
+      const paths = Array.isArray(selected) ? selected : [selected]
+      for (const filePath of paths) {
+        const name = filePath.split('/').pop() || filePath
+        if (attachments.some(a => a.path === filePath)) continue
+        try {
+          const content = await readFileContent(filePath)
+          setAttachments(prev => [...prev, { name, path: filePath, content }])
+        } catch (e) {
+          console.error('Failed to read file:', e)
+        }
+      }
+    } catch (e) {
+      console.error('File dialog error:', e)
+    }
+  }
+
+  const removeAttachment = (path: string) => {
+    setAttachments(prev => prev.filter(a => a.path !== path))
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -73,7 +120,8 @@ export function ChatPanel() {
 
   const handleSend = async () => {
     const trimmed = message.trim()
-    if (!trimmed || isStreaming) return
+    if ((!trimmed && attachments.length === 0) || isStreaming) return
+    const displayText = trimmed || `Analyze the attached file${attachments.length > 1 ? 's' : ''}`
 
     if (ollamaStatus !== 'connected') {
       let chatId = activeChatId
@@ -82,7 +130,7 @@ export function ChatPanel() {
         setActiveChat(chatId)
       }
       setSidebarTab('chats')
-      addMessage(chatId, 'user', trimmed)
+      addMessage(chatId, 'user', displayText)
       setMessage('')
       addMessage(chatId, 'assistant', 'Ollama is not running. Please start Ollama to chat with AI models.')
       return
@@ -98,13 +146,37 @@ export function ChatPanel() {
       setActiveChat(chatId)
     }
     setSidebarTab('chats')
-    addMessage(chatId, 'user', trimmed)
+    const currentAttachments = attachments.length > 0 ? [...attachments] : undefined
+    addMessage(chatId, 'user', displayText, currentAttachments)
     setMessage('')
+    setAttachments([])
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
     // Build messages array for Ollama (before adding empty assistant msg)
     const currentChat = useChatStore.getState().chats.find(c => c.id === chatId)
-    const ollamaMessages = currentChat?.messages.map(m => ({ role: m.role, content: m.content })) ?? []
+    const ollamaMessages: { role: string; content: string }[] = []
+
+    // Add context folder files as a system-level context (auto-synced by FilesPanel)
+    const folders = useAppStore.getState().contextFolders
+    if (folders.length > 0) {
+      const folderContext = folders
+        .flatMap(f => f.files.map(file => `--- ${file.name} ---\n${file.content}`))
+        .join('\n\n')
+      ollamaMessages.push({
+        role: 'system',
+        content: `The user has provided these project files as context:\n\n${folderContext}`,
+      })
+    }
+
+    // Add chat messages
+    for (const m of currentChat?.messages ?? []) {
+      let content = m.content
+      if (m.attachments?.length) {
+        const fileContext = m.attachments.map(a => `--- File: ${a.name} ---\n${a.content}`).join('\n\n')
+        content = `${fileContext}\n\n${content}`
+      }
+      ollamaMessages.push({ role: m.role, content })
+    }
 
     // Add empty assistant message as placeholder for streaming
     addMessage(chatId, 'assistant', '')
@@ -133,6 +205,15 @@ export function ChatPanel() {
       updateLastMessage(chatId!, `Error: ${errorMsg}`)
       setIsStreaming(false)
     }
+  }
+
+  const handleCancel = async () => {
+    try {
+      await cancelChat()
+    } catch (e) {
+      console.error('Cancel error:', e)
+    }
+    setIsStreaming(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -185,12 +266,34 @@ export function ChatPanel() {
 
       {/* Input */}
       <div className="shrink-0" style={{ padding: '16px 20px 20px 20px' }}>
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 8, paddingLeft: 4 }}>
+            {attachments.map(att => (
+              <span
+                key={att.path}
+                className="flex items-center text-xs text-indigo-300 bg-indigo-500/10 rounded-lg ring-1 ring-indigo-500/20"
+                style={{ padding: '4px 8px', gap: 6 }}
+              >
+                <FileText size={12} />
+                {att.name}
+                <button
+                  onClick={() => removeAttachment(att.path)}
+                  className="text-slate-500 hover:text-white transition-colors"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <div
           className="flex items-center rounded-xl ring-1 ring-white/[0.08]"
           style={{ background: '#0f1623', padding: '12px 12px 12px 12px', gap: 8 }}
         >
           <button
-            className="flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-colors shrink-0"
+            onClick={handleAttach}
+            disabled={isStreaming}
+            className="flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-colors shrink-0 disabled:opacity-50"
             style={{ width: 36, height: 36 }}
             title="Attach file"
           >
@@ -207,18 +310,25 @@ export function ChatPanel() {
             className="flex-1 bg-transparent text-[15px] text-white placeholder-slate-500 outline-none resize-none disabled:opacity-50"
             style={{ lineHeight: '24px', maxHeight: 120 }}
           />
-          <button
-            onClick={handleSend}
-            disabled={!message.trim() || isStreaming}
-            className="flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-25 disabled:cursor-not-allowed shrink-0"
-            style={{ width: 40, height: 40 }}
-          >
-            {isStreaming ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
+          {isStreaming ? (
+            <button
+              onClick={handleCancel}
+              className="flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors shrink-0"
+              style={{ width: 40, height: 40 }}
+              title="Stop generating"
+            >
+              <Square size={14} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!message.trim() && attachments.length === 0}
+              className="flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-25 disabled:cursor-not-allowed shrink-0"
+              style={{ width: 40, height: 40 }}
+            >
               <Send size={16} />
-            )}
-          </button>
+            </button>
+          )}
         </div>
       </div>
     </div>

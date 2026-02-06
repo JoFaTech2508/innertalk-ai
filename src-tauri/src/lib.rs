@@ -1,11 +1,16 @@
 mod ollama;
 mod sidecar;
 
+use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
+use std::sync::Mutex;
 use tauri::RunEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(ollama::ChatCancelFlag(AtomicBool::new(false)))
+        .manage(ollama::FolderWatchers(Mutex::new(HashMap::new())))
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -14,6 +19,8 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            app.handle().plugin(tauri_plugin_dialog::init())?;
 
             match sidecar::start_ollama(app) {
                 Ok(()) => log::info!("Ollama sidecar started"),
@@ -27,10 +34,15 @@ pub fn run() {
             ollama::list_models,
             ollama::get_system_ram,
             ollama::chat,
+            ollama::cancel_chat,
             ollama::pull_model,
             ollama::delete_model,
             ollama::wait_for_ollama,
             ollama::get_storage_info,
+            ollama::read_file_content,
+            ollama::read_folder_files,
+            ollama::watch_folder,
+            ollama::unwatch_folder,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

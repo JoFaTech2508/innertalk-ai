@@ -1,33 +1,84 @@
-import { FolderOpen, File, Plus, X } from 'lucide-react'
-import { useState } from 'react'
-
-interface FileItem {
-  id: string
-  name: string
-  path: string
-  type: 'file' | 'folder'
-}
+import { FolderOpen, Plus, X, Loader2, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { open } from '@tauri-apps/plugin-dialog'
+import { listen } from '@tauri-apps/api/event'
+import { useAppStore } from '../../stores/appStore'
+import { readFolderFiles, watchFolder, unwatchFolder } from '../../lib/ollama'
 
 interface FilesPanelProps {
   embedded?: boolean
 }
 
 export function FilesPanel({ embedded }: FilesPanelProps) {
-  const [files, setFiles] = useState<FileItem[]>([])
+  const { contextFolders, addContextFolder, removeContextFolder, updateContextFolder } = useAppStore()
+  const [loading, setLoading] = useState(false)
+  const [refreshingId, setRefreshingId] = useState<string | null>(null)
 
-  const handleAddFolder = () => {
-    const newFolder: FileItem = {
-      id: Math.random().toString(36).substring(2),
-      name: 'Example Folder',
-      path: '/example/path',
-      type: 'folder',
+  const handleAddFolder = async () => {
+    try {
+      const selected = await open({ directory: true, multiple: false })
+      if (!selected) return
+
+      const folderPath = typeof selected === 'string' ? selected : selected[0]
+      if (!folderPath) return
+
+      if (contextFolders.some(f => f.path === folderPath)) return
+
+      setLoading(true)
+      const files = await readFolderFiles(folderPath)
+      const folderName = folderPath.split('/').pop() || folderPath
+
+      addContextFolder({
+        id: Math.random().toString(36).substring(2),
+        name: folderName,
+        path: folderPath,
+        files,
+      })
+    } catch (e) {
+      console.error('Folder dialog error:', e)
+    } finally {
+      setLoading(false)
     }
-    setFiles([...files, newFolder])
   }
 
-  const handleRemove = (id: string) => {
-    setFiles(files.filter(f => f.id !== id))
+  const handleRefresh = async (folder: { id: string; path: string }) => {
+    setRefreshingId(folder.id)
+    try {
+      const files = await readFolderFiles(folder.path)
+      updateContextFolder(folder.id, files)
+    } catch (e) {
+      console.error('Folder refresh error:', e)
+    } finally {
+      setRefreshingId(null)
+    }
   }
+
+  // Watch folders for file changes
+  const foldersRef = useRef(contextFolders)
+  foldersRef.current = contextFolders
+
+  useEffect(() => {
+    // Start watching all current folders
+    for (const folder of contextFolders) {
+      watchFolder(folder.path).catch(() => {})
+    }
+
+    // Listen for change events from the native watcher
+    const unlisten = listen<string>('folder-changed', async (event) => {
+      const changedPath = event.payload
+      const folder = foldersRef.current.find(f => f.path === changedPath)
+      if (folder) {
+        try {
+          const files = await readFolderFiles(folder.path)
+          useAppStore.getState().updateContextFolder(folder.id, files)
+        } catch { /* ignore */ }
+      }
+    })
+
+    return () => {
+      unlisten.then(fn => fn())
+    }
+  }, [contextFolders.length])
 
   const content = (
     <>
@@ -35,17 +86,22 @@ export function FilesPanel({ embedded }: FilesPanelProps) {
       <div className="shrink-0" style={{ padding: '16px 16px 12px 16px' }}>
         <button
           onClick={handleAddFolder}
-          className="flex items-center justify-center w-full rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-colors text-sm font-medium"
+          disabled={loading}
+          className="flex items-center justify-center w-full rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 transition-colors text-sm font-medium disabled:opacity-50"
           style={{ gap: 8, padding: '11px 16px' }}
         >
-          <Plus size={15} />
-          Add Folder
+          {loading ? (
+            <Loader2 size={15} className="animate-spin" />
+          ) : (
+            <Plus size={15} />
+          )}
+          {loading ? 'Reading files...' : 'Add Folder'}
         </button>
       </div>
 
       {/* File list */}
       <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: '0 12px 12px 12px' }}>
-        {files.length === 0 ? (
+        {contextFolders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full" style={{ gap: 16 }}>
             <div
               className="rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center"
@@ -54,41 +110,58 @@ export function FilesPanel({ embedded }: FilesPanelProps) {
               <FolderOpen size={20} className="text-slate-500" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-slate-300">No files added</p>
-              <p className="text-xs text-slate-500" style={{ marginTop: 4 }}>Add folders for the AI to read</p>
+              <p className="text-sm font-medium text-slate-300">No folders added</p>
+              <p className="text-xs text-slate-500" style={{ marginTop: 4 }}>
+                Add folders to give the AI context about your project
+              </p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col" style={{ gap: 6 }}>
-            {files.map(file => (
-              <div
-                key={file.id}
-                className="group flex items-center rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06] hover:bg-white/[0.06] transition-colors"
-                style={{ gap: 12, padding: '12px 14px' }}
-              >
+            {contextFolders.map(folder => {
+              const isRefreshing = refreshingId === folder.id
+              return (
                 <div
-                  className="rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"
-                  style={{ width: 34, height: 34 }}
+                  key={folder.id}
+                  className="group flex items-center rounded-xl bg-white/[0.03] ring-1 ring-white/[0.06] hover:bg-white/[0.06] transition-colors"
+                  style={{ gap: 12, padding: '12px 14px' }}
                 >
-                  {file.type === 'folder' ? (
+                  <div
+                    className="rounded-lg bg-indigo-500/20 flex items-center justify-center shrink-0"
+                    style={{ width: 34, height: 34 }}
+                  >
                     <FolderOpen size={14} className="text-indigo-400" />
-                  ) : (
-                    <File size={14} className="text-slate-400" />
-                  )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-200 truncate">{folder.name}</p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {folder.files.length} file{folder.files.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all" style={{ gap: 2 }}>
+                    <button
+                      onClick={() => handleRefresh(folder)}
+                      disabled={isRefreshing}
+                      className="flex items-center justify-center rounded-md hover:bg-white/[0.06] text-slate-500 hover:text-slate-300 transition-colors"
+                      style={{ width: 28, height: 28 }}
+                      title="Refresh files"
+                    >
+                      <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        unwatchFolder(folder.path).catch(() => {})
+                        removeContextFolder(folder.id)
+                      }}
+                      className="flex items-center justify-center rounded-md hover:bg-white/[0.06] text-slate-500 hover:text-red-400 transition-colors"
+                      style={{ width: 28, height: 28 }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-200 truncate">{file.name}</p>
-                  <p className="text-xs text-slate-500 truncate">{file.path}</p>
-                </div>
-                <button
-                  onClick={() => handleRemove(file.id)}
-                  className="opacity-0 group-hover:opacity-100 flex items-center justify-center rounded-md hover:bg-white/[0.06] transition-all text-slate-500 hover:text-red-400"
-                  style={{ width: 28, height: 28 }}
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

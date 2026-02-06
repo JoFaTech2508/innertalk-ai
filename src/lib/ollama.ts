@@ -89,3 +89,29 @@ export interface StorageInfo {
 export async function getStorageInfo(): Promise<StorageInfo> {
   return invoke<StorageInfo>('get_storage_info')
 }
+
+export async function cancelChat(): Promise<void> {
+  await invoke('cancel_chat')
+}
+
+export async function readFileContent(path: string): Promise<string> {
+  return invoke<string>('read_file_content', { path })
+}
+
+export interface FolderFile {
+  name: string
+  path: string
+  content: string
+}
+
+export async function readFolderFiles(path: string): Promise<FolderFile[]> {
+  return invoke<FolderFile[]>('read_folder_files', { path })
+}
+
+export async function watchFolder(path: string): Promise<void> {
+  await invoke('watch_folder', { path })
+}
+
+export async function unwatchFolder(path: string): Promise<void> {
+  await invoke('unwatch_folder', { path })
+}
