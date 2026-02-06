@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Settings, ChevronDown, Check, Cpu } from 'lucide-react'
-import { FilesPanel } from './components/files/FilesPanel'
+import { LeftPanel } from './components/sidebar/LeftPanel'
 import { ChatPanel } from './components/chat/ChatPanel'
 import { SettingsModal } from './components/settings/SettingsModal'
 import { useAppStore } from './stores/appStore'
@@ -13,9 +13,7 @@ function App() {
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ background: '#0b1120', padding: '12px 20px 20px 20px' }}>
       {/* Top bar */}
-      <div className="flex items-center justify-between shrink-0" style={{ height: 56 }}>
-        <h1 className="text-base font-semibold text-white tracking-tight">Local AI Chat</h1>
-
+      <div className="flex items-center justify-end shrink-0" style={{ height: 50 }}>
         {/* Right side: model selector + settings */}
         <div className="flex items-center" style={{ gap: 8 }}>
           {/* Model selector */}
@@ -88,7 +86,7 @@ function App() {
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden min-h-0" style={{ gap: 20 }}>
         <div className="shrink-0 overflow-hidden" style={{ width: 300, minWidth: 220 }}>
-          <FilesPanel />
+          <LeftPanel />
         </div>
         <div className="flex-1 overflow-hidden min-w-0">
           <ChatPanel />

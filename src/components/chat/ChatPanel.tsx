@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, User, Send } from 'lucide-react'
+import { Bot, User, Send, Paperclip } from 'lucide-react'
 import { useChatStore } from '../../stores/chatStore'
 import { useAppStore } from '../../stores/appStore'
 import type { Message } from '../../stores/chatStore'
@@ -10,7 +10,7 @@ function ChatMessage({ message }: { message: Message }) {
   return (
     <div
       className="flex"
-      style={{ gap: 16, padding: '20px 28px' }}
+      style={{ gap: 16, padding: '20px 28px', background: isUser ? 'rgba(255,255,255,0.02)' : 'transparent' }}
     >
       <div
         className={`rounded-xl flex items-center justify-center shrink-0 ${
@@ -43,7 +43,7 @@ function ChatMessage({ message }: { message: Message }) {
 
 export function ChatPanel() {
   const { chats, activeChatId, createChat, setActiveChat, addMessage } = useChatStore()
-  const { selectedModel } = useAppStore()
+  const { selectedModel, setSidebarTab } = useAppStore()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState('')
@@ -70,12 +70,13 @@ export function ChatPanel() {
       chatId = createChat(selectedModel)
       setActiveChat(chatId)
     }
+    setSidebarTab('chats')
     addMessage(chatId, 'user', trimmed)
     setMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
     setTimeout(() => {
-      addMessage(chatId!, 'assistant', `This is a mock response. Ollama integration coming soon!\n\nYou said: "${trimmed}"`)
+      addMessage(chatId!, 'assistant', `This is a mock response. Ollama integration coming soon! You said: "${trimmed}"`)
     }, 800)
   }
 
@@ -125,8 +126,15 @@ export function ChatPanel() {
       <div className="shrink-0" style={{ padding: '16px 20px 20px 20px' }}>
         <div
           className="flex items-center rounded-xl ring-1 ring-white/[0.08]"
-          style={{ background: '#0f1623', padding: '12px 12px 12px 20px', gap: 12 }}
+          style={{ background: '#0f1623', padding: '12px 12px 12px 12px', gap: 8 }}
         >
+          <button
+            className="flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-300 hover:bg-white/[0.06] transition-colors shrink-0"
+            style={{ width: 36, height: 36 }}
+            title="Attach file"
+          >
+            <Paperclip size={16} />
+          </button>
           <textarea
             ref={textareaRef}
             value={message}
