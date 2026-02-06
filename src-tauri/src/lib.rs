@@ -2,14 +2,13 @@ mod ollama;
 mod sidecar;
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 use tauri::RunEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(ollama::ChatCancelFlag(AtomicBool::new(false)))
+        .manage(ollama::ChatAbortHandle(Mutex::new(None)))
         .manage(ollama::FolderWatchers(Mutex::new(HashMap::new())))
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -43,6 +42,7 @@ pub fn run() {
             ollama::read_folder_files,
             ollama::watch_folder,
             ollama::unwatch_folder,
+            sidecar::restart_ollama,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -313,11 +313,11 @@ export function ChatPanel() {
           {isStreaming ? (
             <button
               onClick={handleCancel}
-              className="flex items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors shrink-0"
+              className="flex items-center justify-center rounded-lg bg-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.12] transition-colors shrink-0"
               style={{ width: 40, height: 40 }}
               title="Stop generating"
             >
-              <Square size={14} fill="currentColor" />
+              <Square size={12} fill="currentColor" />
             </button>
           ) : (
             <button

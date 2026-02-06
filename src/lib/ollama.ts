@@ -94,6 +94,10 @@ export async function cancelChat(): Promise<void> {
   await invoke('cancel_chat')
 }
 
+export async function restartOllama(): Promise<void> {
+  await invoke('restart_ollama')
+}
+
 export async function readFileContent(path: string): Promise<string> {
   return invoke<string>('read_file_content', { path })
 }

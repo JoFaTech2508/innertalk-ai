@@ -1,7 +1,7 @@
-import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick, Loader2, TriangleAlert } from 'lucide-react'
+import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick, Loader2, TriangleAlert, RefreshCw } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../../stores/appStore'
-import { pullModel, deleteModel, listModels, getStorageInfo } from '../../lib/ollama'
+import { pullModel, deleteModel, listModels, getStorageInfo, restartOllama, checkOllama } from '../../lib/ollama'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -48,6 +48,30 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [showAllModels, setShowAllModels] = useState(false)
   const [storageSize, setStorageSize] = useState(0)
+  const [pullError, setPullError] = useState<string | null>(null)
+  const [restarting, setRestarting] = useState(false)
+
+  const handleRestart = async () => {
+    setRestarting(true)
+    try {
+      await restartOllama()
+      // Wait for Ollama to be ready
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 500))
+        const ok = await checkOllama()
+        if (ok) {
+          useAppStore.getState().setOllamaStatus('connected')
+          const models = await listModels()
+          setAvailableModels(models.map(m => m.name))
+          break
+        }
+      }
+    } catch (e) {
+      console.error('Restart failed:', e)
+    } finally {
+      setRestarting(false)
+    }
+  }
 
   const refreshStorage = async () => {
     try {
@@ -82,40 +106,37 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const handlePull = async (modelName: string) => {
     if (pullingModel) return
     setPullingModel(modelName)
-
     setPullPercent(0)
+    setPullError(null)
 
     try {
       await pullModel(
         modelName,
         (_status, completed, total) => {
           if (completed && total && total > 0) {
-            const pct = Math.round((completed / total) * 100)
-            setPullPercent(pct)
-            } else {
+            setPullPercent(Math.round((completed / total) * 100))
           }
         },
         async () => {
           setPullingModel(null)
-
           setPullPercent(0)
-          // Refresh model list
           try {
             const models = await listModels()
             setAvailableModels(models.map(m => m.name))
           } catch { /* ignore */ }
+          refreshStorage()
         },
         (error) => {
           setPullingModel(null)
-
           setPullPercent(0)
-          console.error('Pull failed:', error)
+          setPullError(error)
         },
       )
     } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Download failed. Check your internet connection.'
       setPullingModel(null)
       setPullPercent(0)
-      console.error('Pull error:', e)
+      setPullError(msg)
     }
   }
 
@@ -159,26 +180,58 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
           {/* System info */}
           <div
-            className="flex items-center flex-wrap rounded-xl ring-1 ring-white/[0.06]"
+            className="rounded-xl ring-1 ring-white/[0.06] flex flex-col"
             style={{ padding: '14px 18px', gap: 10, marginBottom: 28, background: 'rgba(255,255,255,0.02)' }}
           >
-            <MemoryStick size={15} className="text-slate-500" />
-            <span className="text-xs text-slate-400">RAM</span>
-            <span className="text-xs font-semibold text-white">{ramGB} GB</span>
-            <span className="text-[10px] text-slate-500">&middot;</span>
-            <span className="text-xs text-slate-500">Up to ~{ramGB <= 8 ? '4B' : ramGB <= 16 ? '10B' : ramGB <= 32 ? '20B' : '70B'} recommended</span>
-            <span className="text-[10px] text-slate-500">&middot;</span>
-            <span className={`text-xs font-medium ${ollamaStatus === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
-              {ollamaStatus === 'connected' ? 'Ollama running' : 'Ollama offline'}
-            </span>
-            {availableModels.length > 0 && storageSize > 0 && (
-              <>
-                <span className="text-[10px] text-slate-500">&middot;</span>
-                <HardDrive size={13} className="text-slate-500" />
-                <span className="text-xs text-slate-500">{formatSize(storageSize)} used</span>
-              </>
+            <div className="flex items-center flex-wrap" style={{ gap: 10 }}>
+              <MemoryStick size={15} className="text-slate-500" />
+              <span className="text-xs text-slate-400">RAM</span>
+              <span className="text-xs font-semibold text-white">{ramGB} GB</span>
+              <span className="text-[10px] text-slate-500">&middot;</span>
+              <span className="text-xs text-slate-500">Up to ~{ramGB <= 8 ? '4B' : ramGB <= 16 ? '10B' : ramGB <= 32 ? '20B' : '70B'} recommended</span>
+              <span className="text-[10px] text-slate-500">&middot;</span>
+              <span className={`text-xs font-medium ${ollamaStatus === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {restarting ? 'Restarting...' : ollamaStatus === 'connected' ? 'Ollama running' : 'Ollama offline'}
+              </span>
+            </div>
+            {storageSize > 0 && (
+              <div className="flex items-center" style={{ gap: 10 }}>
+                <HardDrive size={15} className="text-slate-500" />
+                <span className="text-xs text-slate-400">Storage used</span>
+                <span className="text-xs font-semibold text-white">{formatSize(storageSize)}</span>
+              </div>
             )}
           </div>
+
+          {/* Restart Ollama — troubleshooting button */}
+          <div className="flex justify-start" style={{ marginTop: -18, marginBottom: 24 }}>
+            <button
+              onClick={handleRestart}
+              disabled={restarting}
+              className="flex items-center rounded-lg bg-red-500/[0.12] text-red-300 hover:bg-red-500/[0.20] hover:text-red-200 transition-colors disabled:opacity-50"
+              style={{ gap: 6, padding: '7px 14px', fontSize: 12 }}
+            >
+              <RefreshCw size={12} className={restarting ? 'animate-spin' : ''} />
+              {restarting ? 'Restarting...' : 'Restart Ollama'}
+            </button>
+          </div>
+
+          {/* Error banner */}
+          {pullError && (
+            <div
+              className="flex items-center rounded-xl ring-1 ring-red-500/20"
+              style={{ padding: '12px 16px', gap: 12, marginBottom: 20, background: 'rgba(239,68,68,0.06)' }}
+            >
+              <TriangleAlert size={15} className="text-red-400 shrink-0" />
+              <p className="text-xs text-red-300 flex-1">{pullError}</p>
+              <button
+                onClick={() => setPullError(null)}
+                className="text-red-400/60 hover:text-red-300 transition-colors shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {/* Downloaded Models Section */}
           <div className="flex items-center" style={{ gap: 10, marginBottom: 20 }}>
@@ -314,7 +367,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               type="text"
               value={modelSearch}
               onChange={e => setModelSearch(e.target.value)}
-              placeholder="Search models..."
+              onKeyDown={e => {
+                if (e.key === 'Enter' && modelSearch.trim() && !pullingModel && filteredModels.length === 0) {
+                  handlePull(modelSearch.trim())
+                }
+              }}
+              placeholder="Search or type any model name..."
               className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 outline-none"
             />
           </div>
@@ -416,9 +474,46 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             ))}
 
             {groupedModels.length === 0 && modelSearch && (
-              <div className="text-center" style={{ padding: '24px 0' }}>
-                <p className="text-sm text-slate-400">No models found for "{modelSearch}"</p>
-                <p className="text-xs text-slate-500" style={{ marginTop: 6 }}>Try a different search term</p>
+              <div
+                className="flex items-center justify-between rounded-xl ring-1 ring-white/[0.06]"
+                style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.02)' }}
+              >
+                <div className="flex items-center" style={{ gap: 14 }}>
+                  <div
+                    className="rounded-lg bg-white/[0.04] flex items-center justify-center"
+                    style={{ width: 36, height: 36 }}
+                  >
+                    <Cpu size={16} className="text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">{modelSearch.trim()}</p>
+                    <p className="text-xs text-slate-500" style={{ marginTop: 3 }}>Not in catalog &middot; Pull from Ollama library</p>
+                  </div>
+                </div>
+                {pullingModel === modelSearch.trim() ? (
+                  <div className="flex items-center shrink-0" style={{ gap: 10, minWidth: 140 }}>
+                    <Loader2 size={16} className="text-indigo-400 animate-spin shrink-0" />
+                    <div className="flex-1 flex flex-col" style={{ gap: 4 }}>
+                      <div className="rounded-full overflow-hidden" style={{ width: 100, height: 6, background: 'rgba(255,255,255,0.08)' }}>
+                        <div
+                          className="h-full bg-indigo-500 rounded-full transition-all"
+                          style={{ width: `${pullPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-sm text-indigo-400 font-semibold tabular-nums shrink-0">{pullPercent}%</span>
+                  </div>
+                ) : (
+                  <button
+                    className="flex items-center rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                    style={{ padding: '8px 14px', gap: 6 }}
+                    disabled={!!pullingModel || ollamaStatus !== 'connected'}
+                    onClick={() => handlePull(modelSearch.trim())}
+                  >
+                    <Download size={12} />
+                    Pull
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -1,14 +1,15 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::ipc::Channel;
 use tauri::{Emitter, Manager};
+use tokio::task::AbortHandle;
 
 const OLLAMA_BASE: &str = "http://localhost:11434";
 
 // ── Chat cancellation ───────────────────────────────────────────────
 
-pub struct ChatCancelFlag(pub AtomicBool);
+pub struct ChatAbortHandle(pub Mutex<Option<AbortHandle>>);
 
 // ── Public types (sent to frontend) ──────────────────────────────────
 
@@ -166,11 +167,6 @@ pub async fn chat(
     messages: Vec<ChatMessage>,
     on_event: Channel<StreamEvent>,
 ) -> Result<(), String> {
-    // Reset cancel flag at start
-    if let Some(flag) = app_handle.try_state::<ChatCancelFlag>() {
-        flag.0.store(false, Ordering::Relaxed);
-    }
-
     let client = reqwest::Client::new();
     let url = format!("{}/api/chat", OLLAMA_BASE);
 
@@ -193,44 +189,62 @@ pub async fn chat(
         return Err(format!("Ollama error ({status}): {text}"));
     }
 
-    // Stream with cancel checking
-    let mut stream = resp.bytes_stream();
-    let mut buffer = String::new();
+    // Spawn the streaming in a task so we can abort it
+    let on_event_clone = on_event.clone();
+    let task = tokio::spawn(async move {
+        let mut stream = resp.bytes_stream();
+        let mut buffer = String::new();
 
-    while let Some(chunk) = stream.next().await {
-        // Check cancel flag
-        if let Some(flag) = app_handle.try_state::<ChatCancelFlag>() {
-            if flag.0.load(Ordering::Relaxed) {
-                let _ = on_event.send(StreamEvent::Done { total_duration: 0 });
-                return Ok(());
-            }
-        }
+        while let Some(chunk) = stream.next().await {
+            let bytes = match chunk {
+                Ok(b) => b,
+                Err(_) => break,
+            };
+            buffer.push_str(&String::from_utf8_lossy(&bytes));
 
-        let bytes = chunk.map_err(|e| e.to_string())?;
-        buffer.push_str(&String::from_utf8_lossy(&bytes));
+            while let Some(pos) = buffer.find('\n') {
+                let line = buffer[..pos].trim().to_string();
+                buffer = buffer[pos + 1..].to_string();
 
-        while let Some(pos) = buffer.find('\n') {
-            let line = buffer[..pos].trim().to_string();
-            buffer = buffer[pos + 1..].to_string();
+                if line.is_empty() {
+                    continue;
+                }
 
-            if line.is_empty() {
-                continue;
-            }
-
-            if let Ok(parsed) = serde_json::from_str::<ChatChunk>(&line) {
-                if parsed.done {
-                    let _ = on_event.send(StreamEvent::Done {
-                        total_duration: parsed.total_duration.unwrap_or(0),
-                    });
-                } else if let Some(msg) = parsed.message {
-                    if !msg.content.is_empty() {
-                        let _ = on_event.send(StreamEvent::Token {
-                            content: msg.content,
+                if let Ok(parsed) = serde_json::from_str::<ChatChunk>(&line) {
+                    if parsed.done {
+                        let _ = on_event_clone.send(StreamEvent::Done {
+                            total_duration: parsed.total_duration.unwrap_or(0),
                         });
+                    } else if let Some(msg) = parsed.message {
+                        if !msg.content.is_empty() {
+                            let _ = on_event_clone.send(StreamEvent::Token {
+                                content: msg.content,
+                            });
+                        }
                     }
                 }
             }
         }
+    });
+
+    // Store the abort handle so cancel_chat can kill this task
+    if let Some(state) = app_handle.try_state::<ChatAbortHandle>() {
+        *state.0.lock().unwrap() = Some(task.abort_handle());
+    }
+
+    // Wait for task to finish (or get aborted)
+    match task.await {
+        Ok(()) => {}
+        Err(e) if e.is_cancelled() => {
+            // Cancelled by user — send done event
+            let _ = on_event.send(StreamEvent::Done { total_duration: 0 });
+        }
+        Err(e) => return Err(format!("Chat task failed: {e}")),
+    }
+
+    // Clear the abort handle
+    if let Some(state) = app_handle.try_state::<ChatAbortHandle>() {
+        *state.0.lock().unwrap() = None;
     }
 
     Ok(())
@@ -238,8 +252,10 @@ pub async fn chat(
 
 #[tauri::command]
 pub async fn cancel_chat(app_handle: tauri::AppHandle) -> Result<(), String> {
-    if let Some(flag) = app_handle.try_state::<ChatCancelFlag>() {
-        flag.0.store(true, Ordering::Relaxed);
+    if let Some(state) = app_handle.try_state::<ChatAbortHandle>() {
+        if let Some(handle) = state.0.lock().unwrap().take() {
+            handle.abort();
+        }
     }
     Ok(())
 }
@@ -325,36 +341,16 @@ pub struct StorageInfo {
 }
 
 #[tauri::command]
-pub fn get_storage_info(app_handle: tauri::AppHandle) -> Result<StorageInfo, String> {
-    // First check app-bundled models dir
-    let app_models_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?
+pub fn get_storage_info() -> Result<StorageInfo, String> {
+    // Models are stored in the default Ollama directory (~/.ollama/models)
+    let models_dir = dirs::home_dir()
+        .ok_or("Cannot find home directory")?
+        .join(".ollama")
         .join("models");
 
-    let app_size = dir_size(&app_models_dir);
-
-    if app_size > 0 {
-        return Ok(StorageInfo {
-            path: app_models_dir.to_string_lossy().to_string(),
-            size_bytes: app_size,
-        });
-    }
-
-    // Fall back to default Ollama models dir (~/.ollama/models)
-    if let Some(home) = dirs::home_dir() {
-        let default_dir = home.join(".ollama").join("models");
-        let size = dir_size(&default_dir);
-        return Ok(StorageInfo {
-            path: default_dir.to_string_lossy().to_string(),
-            size_bytes: size,
-        });
-    }
-
     Ok(StorageInfo {
-        path: app_models_dir.to_string_lossy().to_string(),
-        size_bytes: 0,
+        path: models_dir.to_string_lossy().to_string(),
+        size_bytes: dir_size(&models_dir),
     })
 }
 
@@ -445,7 +441,6 @@ fn dir_size(path: &std::path::Path) -> u64 {
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::Duration;
 
 pub struct FolderWatchers(pub Mutex<HashMap<String, notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>>>);

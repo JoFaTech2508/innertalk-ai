@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export type Tab = 'chat' | 'files' | 'settings'
 export type SidebarTab = 'chats' | 'files'
@@ -38,26 +39,37 @@ interface AppState {
   updateContextFolder: (id: string, files: ContextFile[]) => void
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  activeTab: 'chat',
-  sidebarTab: 'chats',
-  selectedModel: '',
-  availableModels: [],
-  sidebarCollapsed: false,
-  ollamaStatus: 'checking',
-  systemRam: 0,
-  contextFolders: [],
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      activeTab: 'chat',
+      sidebarTab: 'chats',
+      selectedModel: '',
+      availableModels: [],
+      sidebarCollapsed: false,
+      ollamaStatus: 'checking',
+      systemRam: 0,
+      contextFolders: [],
 
-  setActiveTab: (tab) => set({ activeTab: tab }),
-  setSidebarTab: (tab) => set({ sidebarTab: tab }),
-  setSelectedModel: (model) => set({ selectedModel: model }),
-  setAvailableModels: (models) => set({ availableModels: models }),
-  toggleSidebar: () => set(state => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  setOllamaStatus: (status) => set({ ollamaStatus: status }),
-  setSystemRam: (ram) => set({ systemRam: ram }),
-  addContextFolder: (folder) => set(state => ({ contextFolders: [...state.contextFolders, folder] })),
-  removeContextFolder: (id) => set(state => ({ contextFolders: state.contextFolders.filter(f => f.id !== id) })),
-  updateContextFolder: (id, files) => set(state => ({
-    contextFolders: state.contextFolders.map(f => f.id === id ? { ...f, files } : f),
-  })),
-}))
+      setActiveTab: (tab) => set({ activeTab: tab }),
+      setSidebarTab: (tab) => set({ sidebarTab: tab }),
+      setSelectedModel: (model) => set({ selectedModel: model }),
+      setAvailableModels: (models) => set({ availableModels: models }),
+      toggleSidebar: () => set(state => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      setOllamaStatus: (status) => set({ ollamaStatus: status }),
+      setSystemRam: (ram) => set({ systemRam: ram }),
+      addContextFolder: (folder) => set(state => ({ contextFolders: [...state.contextFolders, folder] })),
+      removeContextFolder: (id) => set(state => ({ contextFolders: state.contextFolders.filter(f => f.id !== id) })),
+      updateContextFolder: (id, files) => set(state => ({
+        contextFolders: state.contextFolders.map(f => f.id === id ? { ...f, files } : f),
+      })),
+    }),
+    {
+      name: 'local-ai-settings',
+      partialize: (state) => ({
+        selectedModel: state.selectedModel,
+        sidebarCollapsed: state.sidebarCollapsed,
+      }),
+    },
+  ),
+)

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export interface Attachment {
   name: string
@@ -36,81 +37,99 @@ interface ChatState {
 
 const generateId = () => Math.random().toString(36).substring(2, 15)
 
-export const useChatStore = create<ChatState>((set, get) => ({
-  chats: [],
-  activeChatId: null,
-  get activeChat() {
-    const state = get()
-    return state.chats.find(c => c.id === state.activeChatId) ?? null
-  },
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set, get) => ({
+      chats: [],
+      activeChatId: null,
+      get activeChat() {
+        const state = get()
+        return state.chats.find(c => c.id === state.activeChatId) ?? null
+      },
 
-  createChat: (model: string) => {
-    const id = generateId()
-    const chat: Chat = {
-      id,
-      title: 'New Chat',
-      messages: [],
-      model,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    }
-    set(state => ({
-      chats: [chat, ...state.chats],
-      activeChatId: id,
-    }))
-    return id
-  },
+      createChat: (model: string) => {
+        const id = generateId()
+        const chat: Chat = {
+          id,
+          title: 'New Chat',
+          messages: [],
+          model,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }
+        set(state => ({
+          chats: [chat, ...state.chats],
+          activeChatId: id,
+        }))
+        return id
+      },
 
-  deleteChat: (id: string) => {
-    set(state => {
-      const newChats = state.chats.filter(c => c.id !== id)
-      const newActiveId = state.activeChatId === id
-        ? (newChats[0]?.id ?? null)
-        : state.activeChatId
-      return { chats: newChats, activeChatId: newActiveId }
-    })
-  },
+      deleteChat: (id: string) => {
+        set(state => {
+          const newChats = state.chats.filter(c => c.id !== id)
+          const newActiveId = state.activeChatId === id
+            ? (newChats[0]?.id ?? null)
+            : state.activeChatId
+          return { chats: newChats, activeChatId: newActiveId }
+        })
+      },
 
-  setActiveChat: (id: string) => {
-    set({ activeChatId: id })
-  },
+      setActiveChat: (id: string) => {
+        set({ activeChatId: id })
+      },
 
-  addMessage: (chatId: string, role: 'user' | 'assistant', content: string, attachments?: Attachment[]) => {
-    set(state => ({
-      chats: state.chats.map(chat =>
-        chat.id === chatId
-          ? {
-              ...chat,
-              messages: [...chat.messages, {
-                id: generateId(),
-                role,
-                content,
-                ...(attachments?.length ? { attachments } : {}),
-                timestamp: Date.now(),
-              }],
-              title: chat.messages.length === 0 && role === 'user'
-                ? content.slice(0, 40) + (content.length > 40 ? '...' : '')
-                : chat.title,
-              updatedAt: Date.now(),
-            }
-          : chat
-      ),
-    }))
-  },
+      addMessage: (chatId: string, role: 'user' | 'assistant', content: string, attachments?: Attachment[]) => {
+        set(state => ({
+          chats: state.chats.map(chat =>
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  messages: [...chat.messages, {
+                    id: generateId(),
+                    role,
+                    content,
+                    ...(attachments?.length ? { attachments } : {}),
+                    timestamp: Date.now(),
+                  }],
+                  title: chat.messages.length === 0 && role === 'user'
+                    ? content.slice(0, 40) + (content.length > 40 ? '...' : '')
+                    : chat.title,
+                  updatedAt: Date.now(),
+                }
+              : chat
+          ),
+        }))
+      },
 
-  updateLastMessage: (chatId: string, content: string) => {
-    set(state => ({
-      chats: state.chats.map(chat =>
-        chat.id === chatId
-          ? {
-              ...chat,
-              messages: chat.messages.map((msg, i) =>
-                i === chat.messages.length - 1 ? { ...msg, content } : msg
-              ),
-              updatedAt: Date.now(),
-            }
-          : chat
-      ),
-    }))
-  },
-}))
+      updateLastMessage: (chatId: string, content: string) => {
+        set(state => ({
+          chats: state.chats.map(chat =>
+            chat.id === chatId
+              ? {
+                  ...chat,
+                  messages: chat.messages.map((msg, i) =>
+                    i === chat.messages.length - 1 ? { ...msg, content } : msg
+                  ),
+                  updatedAt: Date.now(),
+                }
+              : chat
+          ),
+        }))
+      },
+    }),
+    {
+      name: 'local-ai-chats',
+      partialize: (state) => ({
+        chats: state.chats.map(chat => ({
+          ...chat,
+          // Strip file content from attachments to save space
+          messages: chat.messages.map(msg => ({
+            ...msg,
+            attachments: msg.attachments?.map(a => ({ ...a, content: '' })),
+          })),
+        })),
+        activeChatId: state.activeChatId,
+      }),
+    },
+  ),
+)

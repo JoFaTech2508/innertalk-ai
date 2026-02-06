@@ -7,7 +7,15 @@ pub struct OllamaProcess {
 }
 
 pub fn start_ollama(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let resource_dir = app
+    let child = spawn_ollama(app.handle())?;
+    app.manage(OllamaProcess {
+        child: Mutex::new(Some(child)),
+    });
+    Ok(())
+}
+
+fn spawn_ollama(app_handle: &tauri::AppHandle) -> Result<Child, Box<dyn std::error::Error>> {
+    let resource_dir = app_handle
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to get resource dir: {e}"))?;
@@ -19,44 +27,72 @@ pub fn start_ollama(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> 
         return Err(format!("Ollama binary not found at {:?}", ollama_bin).into());
     }
 
-    // Store models inside the app's data directory so everything is self-contained
-    let models_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {e}"))?
-        .join("models");
-
-    std::fs::create_dir_all(&models_dir)
-        .map_err(|e| format!("Failed to create models dir: {e}"))?;
-
-    log::info!("Ollama models dir: {:?}", models_dir);
+    // Kill any stale Ollama processes from previous runs
+    kill_stale_ollama(&ollama_bin);
 
     let child = Command::new(&ollama_bin)
         .arg("serve")
         .env("DYLD_LIBRARY_PATH", &ollama_dir)
         .env("LD_LIBRARY_PATH", &ollama_dir)
-        .env("OLLAMA_MODELS", &models_dir)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()
         .map_err(|e| format!("Failed to spawn Ollama: {e}"))?;
 
     log::info!("Ollama started (pid: {})", child.id());
-
-    app.manage(OllamaProcess {
-        child: Mutex::new(Some(child)),
-    });
-
-    Ok(())
+    Ok(child)
 }
 
 pub fn stop_ollama(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<OllamaProcess>() {
         if let Ok(mut guard) = state.child.lock() {
             if let Some(mut child) = guard.take() {
-                log::info!("Stopping Ollama process");
+                let pid = child.id();
+                log::info!("Stopping Ollama process (pid: {})", pid);
                 let _ = child.kill();
                 let _ = child.wait();
+                // Also kill any runner child processes spawned by this Ollama
+                #[cfg(unix)]
+                {
+                    let _ = Command::new("pkill")
+                        .args(["-P", &pid.to_string()])
+                        .output();
+                }
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn restart_ollama(app_handle: tauri::AppHandle) -> Result<(), String> {
+    stop_ollama(&app_handle);
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let child = spawn_ollama(&app_handle)
+        .map_err(|e| format!("Failed to restart Ollama: {e}"))?;
+
+    if let Some(state) = app_handle.try_state::<OllamaProcess>() {
+        *state.child.lock().unwrap() = Some(child);
+    }
+
+    Ok(())
+}
+
+/// Kill any stale Ollama processes that match our binary path.
+/// This prevents zombie accumulation during dev restarts.
+fn kill_stale_ollama(ollama_bin: &std::path::Path) {
+    let bin_str = ollama_bin.to_string_lossy();
+    #[cfg(unix)]
+    {
+        // Find PIDs of processes matching our ollama binary
+        if let Ok(output) = Command::new("pgrep").args(["-f", &bin_str]).output() {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            let count = pids.lines().filter(|l| !l.trim().is_empty()).count();
+            if count > 0 {
+                log::info!("Killing {} stale Ollama process(es)", count);
+                let _ = Command::new("pkill").args(["-9", "-f", &bin_str]).output();
+                // Brief pause to let the OS clean up
+                std::thread::sleep(std::time::Duration::from_millis(300));
             }
         }
     }
