@@ -1,6 +1,7 @@
-import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick } from 'lucide-react'
+import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick, Loader2, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import { useAppStore } from '../../stores/appStore'
+import { pullModel, deleteModel, listModels } from '../../lib/ollama'
 
 interface SettingsModalProps {
   onClose: () => void
@@ -38,15 +39,18 @@ const CATEGORY_LABELS = {
   large: 'Large (14B+)',
 }
 
-// TODO: Replace with Tauri system info API
-const SYSTEM_RAM_GB = 16
-
 export function SettingsModal({ onClose }: SettingsModalProps) {
-  const { availableModels } = useAppStore()
+  const { availableModels, setAvailableModels, systemRam, ollamaStatus } = useAppStore()
   const [modelSearch, setModelSearch] = useState('')
+  const [pullingModel, setPullingModel] = useState<string | null>(null)
+  const [pullPercent, setPullPercent] = useState(0)
+  const [deletingModel, setDeletingModel] = useState<string | null>(null)
+  const [showAllModels, setShowAllModels] = useState(false)
+
+  const ramGB = systemRam || 16 // fallback to 16 if not detected yet
 
   const filteredModels = MODEL_CATALOG
-    .filter(m => !availableModels.includes(m.name))
+    .filter(m => !availableModels.some(a => a.startsWith(m.name.split(':')[0])))
     .filter(m =>
       m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
       m.description.toLowerCase().includes(modelSearch.toLowerCase())
@@ -57,6 +61,62 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     label: CATEGORY_LABELS[cat],
     models: filteredModels.filter(m => m.category === cat),
   })).filter(g => g.models.length > 0)
+
+  const handlePull = async (modelName: string) => {
+    if (pullingModel) return
+    setPullingModel(modelName)
+
+    setPullPercent(0)
+
+    try {
+      await pullModel(
+        modelName,
+        (_status, completed, total) => {
+          if (completed && total && total > 0) {
+            const pct = Math.round((completed / total) * 100)
+            setPullPercent(pct)
+            } else {
+          }
+        },
+        async () => {
+          setPullingModel(null)
+
+          setPullPercent(0)
+          // Refresh model list
+          try {
+            const models = await listModels()
+            setAvailableModels(models.map(m => m.name))
+          } catch { /* ignore */ }
+        },
+        (error) => {
+          setPullingModel(null)
+
+          setPullPercent(0)
+          console.error('Pull failed:', error)
+        },
+      )
+    } catch (e) {
+      setPullingModel(null)
+      setPullPercent(0)
+      console.error('Pull error:', e)
+    }
+  }
+
+  const handleDelete = async (modelName: string) => {
+    setDeletingModel(modelName)
+    try {
+      await deleteModel(modelName)
+      // Refresh model list
+      try {
+        const models = await listModels()
+        setAvailableModels(models.map(m => m.name))
+      } catch { /* ignore */ }
+    } catch (e) {
+      console.error('Delete failed:', e)
+    } finally {
+      setDeletingModel(null)
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" style={{ padding: 40 }} onClick={onClose}>
@@ -87,9 +147,13 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           >
             <MemoryStick size={15} className="text-slate-500" />
             <span className="text-xs text-slate-400">System RAM</span>
-            <span className="text-xs font-semibold text-white">{SYSTEM_RAM_GB} GB</span>
+            <span className="text-xs font-semibold text-white">{ramGB} GB</span>
             <span className="text-[10px] text-slate-500">&middot;</span>
-            <span className="text-xs text-slate-500">Models up to ~{SYSTEM_RAM_GB <= 8 ? '4B' : SYSTEM_RAM_GB <= 16 ? '10B' : SYSTEM_RAM_GB <= 32 ? '20B' : '70B'} recommended</span>
+            <span className="text-xs text-slate-500">Models up to ~{ramGB <= 8 ? '4B' : ramGB <= 16 ? '10B' : ramGB <= 32 ? '20B' : '70B'} recommended</span>
+            <span className="text-[10px] text-slate-500">&middot;</span>
+            <span className={`text-xs font-medium ${ollamaStatus === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
+              {ollamaStatus === 'connected' ? 'Ollama running' : 'Ollama offline'}
+            </span>
           </div>
 
           {/* Downloaded Models Section */}
@@ -105,46 +169,94 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           </div>
 
           <div className="flex flex-col" style={{ gap: 10, marginBottom: 32 }}>
-            {availableModels.map(model => {
-              const info = MODEL_CATALOG.find(m => m.name === model)
-              return (
-                <div
-                  key={model}
-                  className="flex items-center justify-between rounded-xl ring-1 ring-white/[0.06]"
-                  style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.02)' }}
-                >
-                  <div className="flex items-center" style={{ gap: 14 }}>
-                    <div
-                      className="rounded-lg bg-indigo-500/20 flex items-center justify-center"
-                      style={{ width: 36, height: 36 }}
-                    >
-                      <Cpu size={16} className="text-indigo-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-white">{model}</p>
-                      <div className="flex items-center" style={{ gap: 6, marginTop: 3 }}>
-                        {info && <span className="text-xs text-slate-500">{info.params} params</span>}
-                        {info && <span className="text-[10px] text-slate-600">&middot;</span>}
-                        <span className="text-xs text-slate-500">{info?.size ?? 'Local model'}</span>
+            {availableModels.length === 0 ? (
+              <div
+                className="flex items-center justify-center rounded-xl ring-1 ring-white/[0.06]"
+                style={{ padding: '24px 18px', background: 'rgba(255,255,255,0.02)' }}
+              >
+                <p className="text-sm text-slate-500">
+                  {ollamaStatus === 'connected' ? 'No models downloaded yet. Pull one below.' : 'Start Ollama to manage models.'}
+                </p>
+              </div>
+            ) : (
+              availableModels.map(model => {
+                const info = MODEL_CATALOG.find(m => m.name === model || model.startsWith(m.name.split(':')[0]))
+                const isDeleting = deletingModel === model
+                return (
+                  <div
+                    key={model}
+                    className="flex items-center justify-between rounded-xl ring-1 ring-white/[0.06]"
+                    style={{ padding: '16px 18px', background: 'rgba(255,255,255,0.02)' }}
+                  >
+                    <div className="flex items-center" style={{ gap: 14 }}>
+                      <div
+                        className="rounded-lg bg-indigo-500/20 flex items-center justify-center"
+                        style={{ width: 36, height: 36 }}
+                      >
+                        <Cpu size={16} className="text-indigo-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">{model}</p>
+                        <div className="flex items-center" style={{ gap: 6, marginTop: 3 }}>
+                          {info && <span className="text-xs text-slate-500">{info.params} params</span>}
+                          {info && <span className="text-[10px] text-slate-600">&middot;</span>}
+                          <span className="text-xs text-slate-500">{info?.size ?? 'Local model'}</span>
+                        </div>
                       </div>
                     </div>
+                    <button
+                      onClick={() => handleDelete(model)}
+                      disabled={isDeleting}
+                      className="flex items-center justify-center rounded-xl text-slate-500 hover:text-red-400 hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                      style={{ width: 36, height: 36 }}
+                    >
+                      {isDeleting ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={15} />
+                      )}
+                    </button>
                   </div>
-                  <button
-                    className="flex items-center justify-center rounded-xl text-slate-500 hover:text-red-400 hover:bg-white/[0.06] transition-colors"
-                    style={{ width: 36, height: 36 }}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
 
           {/* Download New Models Section */}
-          <div className="flex items-center" style={{ gap: 10, marginBottom: 20 }}>
+          <div className="flex items-center" style={{ gap: 10, marginBottom: 16 }}>
             <Download size={16} className="text-slate-500" />
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Download Models</h3>
           </div>
+
+          {/* Show all toggle */}
+          <button
+            onClick={() => setShowAllModels(!showAllModels)}
+            className={`flex items-center w-full text-left rounded-xl ring-1 transition-colors ${showAllModels ? 'ring-amber-500/20' : 'ring-white/[0.06]'}`}
+            style={{
+              padding: '14px 16px',
+              gap: 14,
+              marginBottom: 20,
+              background: showAllModels ? 'rgba(245,158,11,0.06)' : 'rgba(255,255,255,0.02)',
+            }}
+          >
+            <div
+              className={`relative rounded-full shrink-0 transition-colors ${showAllModels ? 'bg-amber-500' : 'bg-white/[0.10]'}`}
+              style={{ width: 44, height: 24 }}
+            >
+              <div
+                className="absolute rounded-full bg-white transition-all"
+                style={{ width: 18, height: 18, top: 3, left: showAllModels ? 23 : 3 }}
+              />
+            </div>
+            <div className="min-w-0">
+              <p className={`text-sm font-medium ${showAllModels ? 'text-amber-300' : 'text-slate-400'}`}>
+                Include larger models
+              </p>
+              <p className="text-xs text-slate-500" style={{ marginTop: 2 }}>
+                {showAllModels ? 'Larger models may run slower on your system' : 'Showing recommended models for your system'}
+              </p>
+            </div>
+          </button>
 
           {/* Search input */}
           <div
@@ -170,24 +282,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </p>
                 <div className="flex flex-col" style={{ gap: 8 }}>
                   {group.models.map(model => {
-                    const canRun = SYSTEM_RAM_GB >= model.maxRam
-                    const isRecommended = canRun && model.maxRam <= SYSTEM_RAM_GB
+                    const canRun = ramGB >= model.maxRam
+                    const isRecommended = canRun && model.maxRam <= ramGB
+                    const isOversized = !canRun
+                    const isPulling = pullingModel === model.name
+                    const canPull = ollamaStatus === 'connected' && (canRun || showAllModels)
                     return (
                       <div
                         key={model.name}
                         className={`flex items-center justify-between rounded-xl ring-1 ring-white/[0.06] ${
-                          !canRun ? 'opacity-40' : ''
+                          isOversized && !showAllModels ? 'opacity-40' : ''
                         }`}
                         style={{ padding: '14px 18px', background: 'rgba(255,255,255,0.02)' }}
                       >
                         <div className="flex items-center" style={{ gap: 14 }}>
                           <div
                             className={`rounded-lg flex items-center justify-center ${
-                              isRecommended ? 'bg-emerald-500/15' : 'bg-white/[0.04]'
+                              isRecommended ? 'bg-emerald-500/15' : isOversized && showAllModels ? 'bg-amber-500/10' : 'bg-white/[0.04]'
                             }`}
                             style={{ width: 36, height: 36 }}
                           >
-                            <Cpu size={16} className={isRecommended ? 'text-emerald-400' : 'text-slate-500'} />
+                            {isOversized && showAllModels ? (
+                              <TriangleAlert size={16} className="text-amber-400" />
+                            ) : (
+                              <Cpu size={16} className={isRecommended ? 'text-emerald-400' : 'text-slate-500'} />
+                            )}
                           </div>
                           <div>
                             <div className="flex items-center" style={{ gap: 8 }}>
@@ -201,24 +320,48 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                                   Recommended
                                 </span>
                               )}
+                              {isOversized && showAllModels && (
+                                <span
+                                  className="flex items-center text-[10px] font-semibold text-amber-400 bg-amber-500/10 rounded-full"
+                                  style={{ padding: '1px 7px', gap: 3 }}
+                                >
+                                  Needs {model.maxRam}GB+
+                                </span>
+                              )}
                             </div>
                             <p className="text-xs text-slate-500" style={{ marginTop: 3 }}>
                               {model.description} &middot; {model.params} &middot; {model.size}
                             </p>
                           </div>
                         </div>
-                        <button
-                          className={`flex items-center rounded-lg transition-colors text-xs font-semibold shrink-0 ${
-                            canRun
-                              ? 'bg-indigo-600 text-white hover:bg-indigo-500'
-                              : 'bg-white/[0.04] text-slate-500 cursor-not-allowed'
-                          }`}
-                          style={{ padding: '8px 14px', gap: 6 }}
-                          disabled={!canRun}
-                        >
-                          <Download size={12} />
-                          Pull
-                        </button>
+                        {isPulling ? (
+                          <div className="flex flex-col items-end shrink-0" style={{ minWidth: 100 }}>
+                            <div className="flex items-center" style={{ gap: 6, marginBottom: 4 }}>
+                              <Loader2 size={12} className="text-indigo-400 animate-spin" />
+                              <span className="text-[11px] text-indigo-400 font-medium">{pullPercent}%</span>
+                            </div>
+                            <div className="rounded-full overflow-hidden" style={{ width: 80, height: 4, background: 'rgba(255,255,255,0.06)' }}>
+                              <div
+                                className="h-full bg-indigo-500 rounded-full transition-all"
+                                style={{ width: `${pullPercent}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            className={`flex items-center rounded-lg transition-colors text-xs font-semibold shrink-0 ${
+                              canPull
+                                ? isOversized ? 'bg-amber-600 text-white hover:bg-amber-500' : 'bg-indigo-600 text-white hover:bg-indigo-500'
+                                : 'bg-white/[0.04] text-slate-500 cursor-not-allowed'
+                            }`}
+                            style={{ padding: '8px 14px', gap: 6 }}
+                            disabled={!canPull || !!pullingModel}
+                            onClick={() => handlePull(model.name)}
+                          >
+                            <Download size={12} />
+                            Pull
+                          </button>
+                        )}
                       </div>
                     )
                   })}

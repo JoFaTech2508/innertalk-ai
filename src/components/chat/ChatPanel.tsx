@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, User, Send, Paperclip } from 'lucide-react'
+import { Bot, User, Send, Paperclip, Loader2 } from 'lucide-react'
 import { useChatStore } from '../../stores/chatStore'
 import { useAppStore } from '../../stores/appStore'
+import { chat as ollamaChat } from '../../lib/ollama'
 import type { Message } from '../../stores/chatStore'
 
-function ChatMessage({ message }: { message: Message }) {
+function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === 'user'
 
   return (
@@ -33,26 +34,34 @@ function ChatMessage({ message }: { message: Message }) {
         >
           {isUser ? 'You' : 'AI Assistant'}
         </p>
-        <p className="text-[15px] leading-7 text-slate-200 whitespace-pre-wrap">
-          {message.content}
-        </p>
+        {message.content ? (
+          <p className="text-[15px] leading-7 text-slate-200 whitespace-pre-wrap">
+            {message.content}
+          </p>
+        ) : isStreaming ? (
+          <div className="flex items-center" style={{ gap: 6, padding: '4px 0' }}>
+            <Loader2 size={14} className="text-slate-400 animate-spin" />
+            <span className="text-sm text-slate-400">Thinking...</span>
+          </div>
+        ) : null}
       </div>
     </div>
   )
 }
 
 export function ChatPanel() {
-  const { chats, activeChatId, createChat, setActiveChat, addMessage } = useChatStore()
-  const { selectedModel, setSidebarTab } = useAppStore()
+  const { chats, activeChatId, createChat, setActiveChat, addMessage, updateLastMessage } = useChatStore()
+  const { selectedModel, setSidebarTab, ollamaStatus } = useAppStore()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
 
   const activeChat = chats.find(c => c.id === activeChatId)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [activeChat?.messages.length])
+  }, [activeChat?.messages.length, activeChat?.messages.at(-1)?.content])
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -61,9 +70,26 @@ export function ChatPanel() {
     }
   }, [message])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = message.trim()
-    if (!trimmed) return
+    if (!trimmed || isStreaming) return
+
+    if (ollamaStatus !== 'connected') {
+      let chatId = activeChatId
+      if (!chatId) {
+        chatId = createChat(selectedModel || 'unknown')
+        setActiveChat(chatId)
+      }
+      setSidebarTab('chats')
+      addMessage(chatId, 'user', trimmed)
+      setMessage('')
+      addMessage(chatId, 'assistant', 'Ollama is not running. Please start Ollama to chat with AI models.')
+      return
+    }
+
+    if (!selectedModel) {
+      return
+    }
 
     let chatId = activeChatId
     if (!chatId) {
@@ -75,9 +101,37 @@ export function ChatPanel() {
     setMessage('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    setTimeout(() => {
-      addMessage(chatId!, 'assistant', `This is a mock response. Ollama integration coming soon! You said: "${trimmed}"`)
-    }, 800)
+    // Build messages array for Ollama (before adding empty assistant msg)
+    const currentChat = useChatStore.getState().chats.find(c => c.id === chatId)
+    const ollamaMessages = currentChat?.messages.map(m => ({ role: m.role, content: m.content })) ?? []
+
+    // Add empty assistant message as placeholder for streaming
+    addMessage(chatId, 'assistant', '')
+    setIsStreaming(true)
+
+    let accumulated = ''
+
+    try {
+      await ollamaChat(
+        selectedModel,
+        ollamaMessages,
+        (token) => {
+          accumulated += token
+          updateLastMessage(chatId!, accumulated)
+        },
+        () => {
+          setIsStreaming(false)
+        },
+        (error) => {
+          updateLastMessage(chatId!, `Error: ${error}`)
+          setIsStreaming(false)
+        },
+      )
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : 'Failed to connect to Ollama'
+      updateLastMessage(chatId!, `Error: ${errorMsg}`)
+      setIsStreaming(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -111,12 +165,18 @@ export function ChatPanel() {
           </div>
         ) : (
           <div>
-            {activeChat.messages.map((msg, i) => (
-              <div key={msg.id}>
-                {i > 0 && <div className="border-t border-white/[0.04]" style={{ margin: '0 28px' }} />}
-                <ChatMessage message={msg} />
-              </div>
-            ))}
+            {activeChat.messages.map((msg, i) => {
+              const isLastMsg = i === activeChat.messages.length - 1
+              return (
+                <div key={msg.id}>
+                  {i > 0 && <div className="border-t border-white/[0.04]" style={{ margin: '0 28px' }} />}
+                  <ChatMessage
+                    message={msg}
+                    isStreaming={isLastMsg && isStreaming && msg.role === 'assistant'}
+                  />
+                </div>
+              )
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -140,18 +200,23 @@ export function ChatPanel() {
             value={message}
             onChange={e => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder={isStreaming ? 'Waiting for response...' : 'Type a message...'}
             rows={1}
-            className="flex-1 bg-transparent text-[15px] text-white placeholder-slate-500 outline-none resize-none"
+            disabled={isStreaming}
+            className="flex-1 bg-transparent text-[15px] text-white placeholder-slate-500 outline-none resize-none disabled:opacity-50"
             style={{ lineHeight: '24px', maxHeight: 120 }}
           />
           <button
             onClick={handleSend}
-            disabled={!message.trim()}
+            disabled={!message.trim() || isStreaming}
             className="flex items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-25 disabled:cursor-not-allowed shrink-0"
             style={{ width: 40, height: 40 }}
           >
-            <Send size={16} />
+            {isStreaming ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Send size={16} />
+            )}
           </button>
         </div>
       </div>

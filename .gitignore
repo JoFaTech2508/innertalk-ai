@@ -15,10 +15,13 @@ dist-ssr
 # Tauri / Rust
 src-tauri/target/
 src-tauri/gen/schemas
+src-tauri/resources/ollama/
 
 # Environment
 .env
 .env.local
+
+.claude-context.md
 
 # Editor directories and files
 .vscode/*

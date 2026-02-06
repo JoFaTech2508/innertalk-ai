@@ -13,10 +13,13 @@
     "windows": [
       {
         "title": "Local AI Chat",
-        "width": 1200,
-        "height": 800,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay",
+        "width": 1100,
+        "height": 750,
         "minWidth": 800,
         "minHeight": 600,
+        "center": true,
         "resizable": true,
         "fullscreen": false
       }
@@ -34,6 +37,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "resources/ollama/*"
     ]
   }
 }
