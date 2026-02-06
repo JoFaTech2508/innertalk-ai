@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Settings, ChevronDown, Check, Cpu, AlertCircle } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { LeftPanel } from './components/sidebar/LeftPanel'
 import { ChatPanel } from './components/chat/ChatPanel'
 import { SettingsModal } from './components/settings/SettingsModal'
 import { useAppStore } from './stores/appStore'
-import { checkOllama, listModels, getSystemRam, waitForOllama } from './lib/ollama'
+import { listModels, getSystemRam, waitForOllama } from './lib/ollama'
 
 function App() {
   const [showSettings, setShowSettings] = useState(false)
@@ -16,6 +16,10 @@ function App() {
     ollamaStatus, setOllamaStatus,
     setSystemRam,
   } = useAppStore()
+
+  useEffect(() => {
+    getCurrentWindow().center()
+  }, [])
 
   useEffect(() => {
     async function init() {

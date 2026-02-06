@@ -19,10 +19,23 @@ pub fn start_ollama(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> 
         return Err(format!("Ollama binary not found at {:?}", ollama_bin).into());
     }
 
+    // Store models inside the app's data directory so everything is self-contained
+    let models_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?
+        .join("models");
+
+    std::fs::create_dir_all(&models_dir)
+        .map_err(|e| format!("Failed to create models dir: {e}"))?;
+
+    log::info!("Ollama models dir: {:?}", models_dir);
+
     let child = Command::new(&ollama_bin)
         .arg("serve")
         .env("DYLD_LIBRARY_PATH", &ollama_dir)
         .env("LD_LIBRARY_PATH", &ollama_dir)
+        .env("OLLAMA_MODELS", &models_dir)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .spawn()

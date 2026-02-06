@@ -1,6 +1,7 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
+use tauri::Manager;
 
 const OLLAMA_BASE: &str = "http://localhost:11434";
 
@@ -268,4 +269,43 @@ pub async fn delete_model(name: String) -> Result<(), String> {
         let text = resp.text().await.unwrap_or_default();
         Err(format!("Delete failed: {text}"))
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct StorageInfo {
+    pub path: String,
+    pub size_bytes: u64,
+}
+
+#[tauri::command]
+pub fn get_storage_info(app_handle: tauri::AppHandle) -> Result<StorageInfo, String> {
+    let models_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?
+        .join("models");
+
+    let size = dir_size(&models_dir);
+
+    Ok(StorageInfo {
+        path: models_dir.to_string_lossy().to_string(),
+        size_bytes: size,
+    })
+}
+
+fn dir_size(path: &std::path::Path) -> u64 {
+    let mut total = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let meta = entry.metadata();
+            if let Ok(m) = meta {
+                if m.is_dir() {
+                    total += dir_size(&entry.path());
+                } else {
+                    total += m.len();
+                }
+            }
+        }
+    }
+    total
 }

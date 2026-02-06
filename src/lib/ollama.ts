@@ -80,3 +80,12 @@ export async function deleteModel(name: string): Promise<void> {
 export async function waitForOllama(): Promise<boolean> {
   return invoke<boolean>('wait_for_ollama')
 }
+
+export interface StorageInfo {
+  path: string
+  sizeBytes: number
+}
+
+export async function getStorageInfo(): Promise<StorageInfo> {
+  return invoke<StorageInfo>('get_storage_info')
+}

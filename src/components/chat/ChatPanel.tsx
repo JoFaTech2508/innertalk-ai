@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bot, User, Send, Paperclip, Loader2 } from 'lucide-react'
+import Markdown from 'react-markdown'
 import { useChatStore } from '../../stores/chatStore'
 import { useAppStore } from '../../stores/appStore'
 import { chat as ollamaChat } from '../../lib/ollama'
@@ -35,9 +36,9 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
           {isUser ? 'You' : 'AI Assistant'}
         </p>
         {message.content ? (
-          <p className="text-[15px] leading-7 text-slate-200 whitespace-pre-wrap">
-            {message.content}
-          </p>
+          <div className="text-[15px] leading-relaxed text-slate-200 prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2 prose-code:text-indigo-300 prose-strong:text-white prose-a:text-indigo-400">
+            <Markdown>{message.content}</Markdown>
+          </div>
         ) : isStreaming ? (
           <div className="flex items-center" style={{ gap: 6, padding: '4px 0' }}>
             <Loader2 size={14} className="text-slate-400 animate-spin" />

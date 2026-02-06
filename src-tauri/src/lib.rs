@@ -30,6 +30,7 @@ pub fn run() {
             ollama::pull_model,
             ollama::delete_model,
             ollama::wait_for_ollama,
+            ollama::get_storage_info,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
