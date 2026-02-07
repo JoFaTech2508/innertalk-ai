@@ -18,10 +18,6 @@ function App() {
   } = useAppStore()
 
   useEffect(() => {
-    getCurrentWindow().center()
-  }, [])
-
-  useEffect(() => {
     async function init() {
       try {
         const ram = await getSystemRam()
@@ -38,8 +34,9 @@ function App() {
             const models = await listModels()
             const names = models.map(m => m.name)
             setAvailableModels(names)
-            if (names.length > 0 && !selectedModel) {
-              setSelectedModel(names[0])
+            const current = useAppStore.getState().selectedModel
+            if (!current || !names.includes(current)) {
+              setSelectedModel(names.length > 0 ? names[0] : '')
             }
           } catch (e) {
             console.error('Failed to fetch models:', e)
@@ -55,13 +52,22 @@ function App() {
     init()
   }, [])
 
+  // Auto-fix selectedModel when models change (e.g. after deletion)
+  useEffect(() => {
+    if (selectedModel && availableModels.length > 0 && !availableModels.includes(selectedModel)) {
+      setSelectedModel(availableModels[0])
+    } else if (!selectedModel && availableModels.length > 0) {
+      setSelectedModel(availableModels[0])
+    }
+  }, [availableModels])
+
   const statusColor =
     ollamaStatus === 'connected' ? 'bg-emerald-500'
     : ollamaStatus === 'checking' ? 'bg-amber-500 animate-pulse'
     : 'bg-red-500'
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ background: '#0b1120', padding: '0px 20px 20px 20px' }}>
+    <div className="fixed inset-0 flex flex-col overflow-hidden" style={{ background: '#0b1120', padding: '0px 12px 12px 12px' }}>
       <div
         onMouseDown={(e) => { if (!(e.target as HTMLElement).closest('button')) getCurrentWindow().startDragging() }}
         className="flex items-center justify-end shrink-0"
@@ -151,7 +157,7 @@ function App() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden min-h-0" style={{ gap: 20 }}>
+      <div className="flex flex-1 overflow-hidden min-h-0" style={{ gap: 12 }}>
         <div className="shrink-0 overflow-hidden" style={{ width: 300, minWidth: 220 }}>
           <LeftPanel />
         </div>

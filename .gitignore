@@ -23,6 +23,7 @@ src-tauri/resources/ollama/
 
 .claude-context.md
 recovery_chat.md
+v2-roadmap.txt
 
 # Editor directories and files
 .vscode/*

@@ -3,7 +3,7 @@ mod sidecar;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tauri::RunEvent;
+use tauri::{Manager, RunEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,6 +24,12 @@ pub fn run() {
             match sidecar::start_ollama(app) {
                 Ok(()) => log::info!("Ollama sidecar started"),
                 Err(e) => log::error!("Failed to start Ollama: {e}"),
+            }
+
+            // Center and show window (starts hidden to avoid flicker)
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.center();
+                let _ = window.show();
             }
 
             Ok(())

@@ -37,3 +37,40 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
+
+/* Markdown rendering in chat — overrides prose defaults */
+.chat-markdown pre {
+  background: #0d1321 !important;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 14px 16px !important;
+  margin: 8px 0 !important;
+  overflow-x: auto;
+}
+
+.chat-markdown pre code {
+  background: none !important;
+  padding: 0 !important;
+  border-radius: 0;
+  font-size: 13px !important;
+  line-height: 1.6;
+  color: #cbd5e1 !important;
+}
+
+.chat-markdown :not(pre) > code {
+  background: rgba(255, 255, 255, 0.08) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px;
+  font-size: 13px !important;
+  color: #a5b4fc !important;
+}
+
+.chat-markdown a {
+  color: #818cf8 !important;
+}
+
+.chat-markdown blockquote {
+  border-left: 3px solid rgba(99, 102, 241, 0.4) !important;
+  padding-left: 12px;
+  color: #94a3b8;
+}

@@ -292,7 +292,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                       <div className="flex items-center shrink-0" style={{ gap: 6 }}>
                         <button
                           onClick={() => { setConfirmDelete(null); handleDelete(model) }}
-                          className="flex items-center rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-500 transition-colors"
+                          className="flex items-center rounded-lg bg-red-500/15 text-red-300 text-xs font-semibold hover:bg-red-500/25 hover:text-red-200 transition-colors"
                           style={{ padding: '6px 12px', gap: 4 }}
                         >
                           <Trash2 size={12} />

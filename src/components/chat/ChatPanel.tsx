@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Bot, User, Send, Paperclip, Loader2, X, FileText, Square } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import { Bot, User, Send, Paperclip, Loader2, X, FileText, Square, Copy, Check } from 'lucide-react'
 import Markdown from 'react-markdown'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useChatStore } from '../../stores/chatStore'
@@ -7,13 +7,43 @@ import { useAppStore } from '../../stores/appStore'
 import { chat as ollamaChat, cancelChat, readFileContent } from '../../lib/ollama'
 import type { Message, Attachment } from '../../stores/chatStore'
 
+function CodeBlock({ children }: { children: ReactNode }) {
+  const [copied, setCopied] = useState(false)
+  const preRef = useRef<HTMLPreElement>(null)
+
+  const handleCopy = useCallback(() => {
+    const text = preRef.current?.textContent || ''
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [])
+
+  return (
+    <div className="relative group">
+      <pre ref={preRef}>{children}</pre>
+      <button
+        onClick={handleCopy}
+        className="absolute top-2 right-2 flex items-center justify-center rounded-md bg-white/[0.06] text-slate-500 hover:text-slate-200 hover:bg-white/[0.12] transition-all opacity-0 group-hover:opacity-100"
+        style={{ width: 28, height: 28 }}
+        title="Copy"
+      >
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+      </button>
+    </div>
+  )
+}
+
+const markdownComponents = {
+  pre: ({ children }: { children?: ReactNode }) => <CodeBlock>{children}</CodeBlock>,
+}
+
 function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
   const isUser = message.role === 'user'
 
   return (
     <div
       className="flex"
-      style={{ gap: 16, padding: '20px 28px', background: isUser ? 'rgba(255,255,255,0.02)' : 'transparent' }}
+      style={{ gap: 12, padding: '16px 20px', background: isUser ? 'rgba(255,255,255,0.02)' : 'transparent' }}
     >
       <div
         className={`rounded-xl flex items-center justify-center shrink-0 ${
@@ -51,8 +81,8 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
           </div>
         )}
         {message.content ? (
-          <div className="text-[15px] leading-relaxed text-slate-200 prose prose-invert prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-pre:my-2 prose-code:text-indigo-300 prose-strong:text-white prose-a:text-indigo-400">
-            <Markdown>{message.content}</Markdown>
+          <div className="chat-markdown prose prose-invert prose-sm max-w-none text-[15px] leading-relaxed text-slate-200">
+            <Markdown components={markdownComponents}>{message.content}</Markdown>
           </div>
         ) : isStreaming ? (
           <div className="flex items-center" style={{ gap: 6, padding: '4px 0' }}>
@@ -251,7 +281,7 @@ export function ChatPanel() {
               const isLastMsg = i === activeChat.messages.length - 1
               return (
                 <div key={msg.id}>
-                  {i > 0 && <div className="border-t border-white/[0.04]" style={{ margin: '0 28px' }} />}
+                  {i > 0 && <div className="border-t border-white/[0.04]" style={{ margin: '0 20px' }} />}
                   <ChatMessage
                     message={msg}
                     isStreaming={isLastMsg && isStreaming && msg.role === 'assistant'}
@@ -265,7 +295,7 @@ export function ChatPanel() {
       </div>
 
       {/* Input */}
-      <div className="shrink-0" style={{ padding: '16px 20px 20px 20px' }}>
+      <div className="shrink-0" style={{ padding: '12px 16px 16px 16px' }}>
         {attachments.length > 0 && (
           <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 8, paddingLeft: 4 }}>
             {attachments.map(att => (
