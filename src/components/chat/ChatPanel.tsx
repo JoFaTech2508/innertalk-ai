@@ -124,7 +124,7 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
 
 export function ChatPanel() {
   const { chats, activeChatId, createChat, setActiveChat, addMessage, updateLastMessage } = useChatStore()
-  const { selectedModel, setSidebarTab, ollamaStatus, contextFolders } = useAppStore()
+  const { selectedModel, setSidebarTab, ollamaStatus } = useAppStore()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState('')
