@@ -7,7 +7,7 @@ import { useAppStore } from '../../stores/appStore'
 import { chat as ollamaChat, cancelChat, readFileContent } from '../../lib/ollama'
 import type { Message, Attachment } from '../../stores/chatStore'
 
-function CodeBlock({ children }: { children: ReactNode }) {
+function CodeBlock({ language, children }: { language?: string; children: ReactNode }) {
   const [copied, setCopied] = useState(false)
   const preRef = useRef<HTMLPreElement>(null)
 
@@ -19,22 +19,49 @@ function CodeBlock({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <div className="relative group">
-      <pre ref={preRef}>{children}</pre>
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 flex items-center justify-center rounded-md bg-white/[0.06] text-slate-500 hover:text-slate-200 hover:bg-white/[0.12] transition-all opacity-0 group-hover:opacity-100"
-        style={{ width: 28, height: 28 }}
-        title="Copy"
-      >
-        {copied ? <Check size={13} /> : <Copy size={13} />}
-      </button>
+    <div className="code-block-wrapper relative group rounded-[10px] overflow-hidden ring-1 ring-white/[0.06]" style={{ margin: '12px 0' }}>
+      {language && (
+        <div
+          className="flex items-center justify-between text-xs text-slate-400"
+          style={{ background: '#0a0f1a', padding: '6px 14px' }}
+        >
+          <span className="font-medium capitalize">{language}</span>
+          <button
+            onClick={handleCopy}
+            className="flex items-center text-slate-500 hover:text-slate-200 transition-colors"
+            style={{ gap: 4 }}
+          >
+            {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+          </button>
+        </div>
+      )}
+      <pre ref={preRef} style={{ margin: 0, borderRadius: 0, border: 'none' }}>{children}</pre>
+      {!language && (
+        <button
+          onClick={handleCopy}
+          className="absolute top-2 right-2 flex items-center justify-center rounded-md bg-white/[0.06] text-slate-500 hover:text-slate-200 hover:bg-white/[0.12] transition-all opacity-0 group-hover:opacity-100"
+          style={{ width: 28, height: 28 }}
+          title="Copy"
+        >
+          {copied ? <Check size={13} /> : <Copy size={13} />}
+        </button>
+      )}
     </div>
   )
 }
 
 const markdownComponents = {
-  pre: ({ children }: { children?: ReactNode }) => <CodeBlock>{children}</CodeBlock>,
+  pre: ({ children }: { children?: ReactNode }) => {
+    // Extract language from the code child's className (e.g. "language-python")
+    let language: string | undefined
+    if (children && typeof children === 'object' && 'props' in (children as any)) {
+      const codeProps = (children as any).props
+      const className = codeProps?.className || ''
+      const match = className.match(/language-(\w+)/)
+      if (match) language = match[1]
+    }
+    return <CodeBlock language={language}>{children}</CodeBlock>
+  },
 }
 
 function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?: boolean }) {
@@ -81,7 +108,7 @@ function ChatMessage({ message, isStreaming }: { message: Message; isStreaming?:
           </div>
         )}
         {message.content ? (
-          <div className="chat-markdown prose prose-invert prose-sm max-w-none text-[15px] leading-relaxed text-slate-200">
+          <div className="chat-markdown text-[15px] text-slate-200">
             <Markdown components={markdownComponents}>{message.content}</Markdown>
           </div>
         ) : isStreaming ? (
