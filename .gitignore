@@ -23,6 +23,7 @@ src-tauri/resources/ollama/
 
 recovery_chat.md
 v2-roadmap.txt
+v3-roadmap.txt
 
 # Editor directories and files
 .vscode/*
