@@ -27,6 +27,10 @@ interface AppState {
   ollamaStatus: OllamaStatus
   systemRam: number
   contextFolders: ContextFolder[]
+  // Pull state (lives in store so it survives settings modal close)
+  pullingModel: string | null
+  pullPercent: number
+  pullError: string | null
   setActiveTab: (tab: Tab) => void
   setSidebarTab: (tab: SidebarTab) => void
   setSelectedModel: (model: string) => void
@@ -37,6 +41,9 @@ interface AppState {
   addContextFolder: (folder: ContextFolder) => void
   removeContextFolder: (id: string) => void
   updateContextFolder: (id: string, files: ContextFile[]) => void
+  setPullingModel: (model: string | null) => void
+  setPullPercent: (percent: number) => void
+  setPullError: (error: string | null) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -50,6 +57,9 @@ export const useAppStore = create<AppState>()(
       ollamaStatus: 'checking',
       systemRam: 0,
       contextFolders: [],
+      pullingModel: null,
+      pullPercent: 0,
+      pullError: null,
 
       setActiveTab: (tab) => set({ activeTab: tab }),
       setSidebarTab: (tab) => set({ sidebarTab: tab }),
@@ -63,12 +73,21 @@ export const useAppStore = create<AppState>()(
       updateContextFolder: (id, files) => set(state => ({
         contextFolders: state.contextFolders.map(f => f.id === id ? { ...f, files } : f),
       })),
+      setPullingModel: (model) => set({ pullingModel: model }),
+      setPullPercent: (percent) => set({ pullPercent: percent }),
+      setPullError: (error) => set({ pullError: error }),
     }),
     {
       name: 'local-ai-settings',
       partialize: (state) => ({
         selectedModel: state.selectedModel,
         sidebarCollapsed: state.sidebarCollapsed,
+        contextFolders: state.contextFolders.map(f => ({
+          id: f.id,
+          name: f.name,
+          path: f.path,
+          files: [], // Don't persist file contents, they'll be re-read on watch
+        })),
       }),
     },
   ),

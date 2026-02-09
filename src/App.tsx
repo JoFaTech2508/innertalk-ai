@@ -5,6 +5,7 @@ import { LeftPanel } from './components/sidebar/LeftPanel'
 import { ChatPanel } from './components/chat/ChatPanel'
 import { SettingsModal } from './components/settings/SettingsModal'
 import { useAppStore } from './stores/appStore'
+import { useChatStore } from './stores/chatStore'
 import { listModels, getSystemRam, waitForOllama } from './lib/ollama'
 
 function App() {
@@ -60,6 +61,15 @@ function App() {
       setSelectedModel(availableModels[0])
     }
   }, [availableModels])
+
+  // Sync model to empty active chat when user switches model
+  useEffect(() => {
+    if (!selectedModel) return
+    const { activeChatId, updateChatModel } = useChatStore.getState()
+    if (activeChatId) {
+      updateChatModel(activeChatId, selectedModel)
+    }
+  }, [selectedModel])
 
   const statusColor =
     ollamaStatus === 'connected' ? 'bg-emerald-500'

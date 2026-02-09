@@ -1,4 +1,4 @@
-import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick, Loader2, TriangleAlert, RefreshCw } from 'lucide-react'
+import { X, Trash2, HardDrive, Download, Search, Cpu, Zap, MemoryStick, Loader2, TriangleAlert, RefreshCw, AlertCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../../stores/appStore'
 import { pullModel, deleteModel, listModels, getStorageInfo, restartOllama, checkOllama } from '../../lib/ollama'
@@ -40,16 +40,18 @@ const CATEGORY_LABELS = {
 }
 
 export function SettingsModal({ onClose }: SettingsModalProps) {
-  const { availableModels, setAvailableModels, systemRam, ollamaStatus } = useAppStore()
+  const {
+    availableModels, setAvailableModels, systemRam, ollamaStatus,
+    pullingModel, pullPercent, pullError,
+    setPullingModel, setPullPercent, setPullError,
+  } = useAppStore()
   const [modelSearch, setModelSearch] = useState('')
-  const [pullingModel, setPullingModel] = useState<string | null>(null)
-  const [pullPercent, setPullPercent] = useState(0)
   const [deletingModel, setDeletingModel] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [showAllModels, setShowAllModels] = useState(false)
   const [storageSize, setStorageSize] = useState(0)
-  const [pullError, setPullError] = useState<string | null>(null)
   const [restarting, setRestarting] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const handleRestart = async () => {
     setRestarting(true)
@@ -203,8 +205,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
             )}
           </div>
 
-          {/* Restart Ollama — troubleshooting button */}
-          <div className="flex justify-start" style={{ marginTop: -18, marginBottom: 24 }}>
+          {/* Restart Ollama & Clear Data */}
+          <div className="flex items-center justify-start" style={{ marginTop: -18, marginBottom: 24, gap: 8 }}>
             <button
               onClick={handleRestart}
               disabled={restarting}
@@ -214,7 +216,51 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               <RefreshCw size={12} className={restarting ? 'animate-spin' : ''} />
               {restarting ? 'Restarting...' : 'Restart Ollama'}
             </button>
+            <button
+              onClick={() => setConfirmClear(true)}
+              className="flex items-center rounded-lg bg-white/[0.04] text-slate-400 hover:bg-red-500/[0.12] hover:text-red-300 transition-colors"
+              style={{ gap: 6, padding: '7px 14px', fontSize: 12 }}
+            >
+              <Trash2 size={12} />
+              Clear App Data
+            </button>
           </div>
+
+          {/* Clear data confirmation */}
+          {confirmClear && (
+            <div
+              className="flex items-start rounded-xl ring-1 ring-red-500/20"
+              style={{ padding: '14px 16px', gap: 12, marginBottom: 20, background: 'rgba(239,68,68,0.06)' }}
+            >
+              <AlertCircle size={16} className="text-red-400 shrink-0" style={{ marginTop: 1 }} />
+              <div className="flex-1">
+                <p className="text-xs text-red-300 font-medium" style={{ marginBottom: 8 }}>
+                  This will delete all chats, settings, and context folders. Models will NOT be deleted.
+                </p>
+                <div className="flex items-center" style={{ gap: 8 }}>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('local-ai-chats')
+                      localStorage.removeItem('local-ai-settings')
+                      window.location.reload()
+                    }}
+                    className="flex items-center rounded-lg bg-red-500/20 text-red-300 text-xs font-semibold hover:bg-red-500/30 transition-colors"
+                    style={{ padding: '6px 12px', gap: 4 }}
+                  >
+                    <Trash2 size={11} />
+                    Confirm Clear
+                  </button>
+                  <button
+                    onClick={() => setConfirmClear(false)}
+                    className="text-xs text-slate-400 hover:text-white transition-colors"
+                    style={{ padding: '6px 8px' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Error banner */}
           {pullError && (

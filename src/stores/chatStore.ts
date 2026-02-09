@@ -33,6 +33,7 @@ interface ChatState {
   setActiveChat: (id: string) => void
   addMessage: (chatId: string, role: 'user' | 'assistant', content: string, attachments?: Attachment[]) => void
   updateLastMessage: (chatId: string, content: string) => void
+  updateChatModel: (chatId: string, model: string) => void
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 15)
@@ -112,6 +113,16 @@ export const useChatStore = create<ChatState>()(
                   ),
                   updatedAt: Date.now(),
                 }
+              : chat
+          ),
+        }))
+      },
+
+      updateChatModel: (chatId: string, model: string) => {
+        set(state => ({
+          chats: state.chats.map(chat =>
+            chat.id === chatId && chat.messages.length === 0
+              ? { ...chat, model }
               : chat
           ),
         }))

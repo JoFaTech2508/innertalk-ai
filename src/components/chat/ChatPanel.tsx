@@ -126,10 +126,13 @@ export function ChatPanel() {
   const { chats, activeChatId, createChat, setActiveChat, addMessage, updateLastMessage } = useChatStore()
   const { selectedModel, setSidebarTab, ollamaStatus } = useAppStore()
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [message, setMessage] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingChatId, setStreamingChatId] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const userScrolledUp = useRef(false)
 
   const activeChat = chats.find(c => c.id === activeChatId)
 
@@ -164,9 +167,24 @@ export function ChatPanel() {
     setAttachments(prev => prev.filter(a => a.path !== path))
   }
 
+  // Smart auto-scroll: only scroll down if user hasn't scrolled up
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!userScrolledUp.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [activeChat?.messages.length, activeChat?.messages.at(-1)?.content])
+
+  // Reset scroll tracking when switching chats
+  useEffect(() => {
+    userScrolledUp.current = false
+  }, [activeChatId])
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    userScrolledUp.current = distanceFromBottom > 100
+  }, [])
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -177,7 +195,10 @@ export function ChatPanel() {
 
   const handleSend = async () => {
     const trimmed = message.trim()
-    if ((!trimmed && attachments.length === 0) || isStreaming) return
+    if ((!trimmed && attachments.length === 0)) return
+    // Block if streaming in another chat
+    if (isStreaming && streamingChatId && streamingChatId !== activeChatId) return
+    if (isStreaming) return
     const displayText = trimmed || `Analyze the attached file${attachments.length > 1 ? 's' : ''}`
 
     if (ollamaStatus !== 'connected') {
@@ -238,6 +259,7 @@ export function ChatPanel() {
     // Add empty assistant message as placeholder for streaming
     addMessage(chatId, 'assistant', '')
     setIsStreaming(true)
+    setStreamingChatId(chatId)
 
     let accumulated = ''
 
@@ -250,17 +272,18 @@ export function ChatPanel() {
           updateLastMessage(chatId!, accumulated)
         },
         () => {
-          setIsStreaming(false)
+          setIsStreaming(false); setStreamingChatId(null)
         },
         (error) => {
           updateLastMessage(chatId!, `Error: ${error}`)
-          setIsStreaming(false)
+          setIsStreaming(false); setStreamingChatId(null)
         },
       )
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Failed to connect to Ollama'
       updateLastMessage(chatId!, `Error: ${errorMsg}`)
       setIsStreaming(false)
+      setStreamingChatId(null)
     }
   }
 
@@ -271,6 +294,7 @@ export function ChatPanel() {
       console.error('Cancel error:', e)
     }
     setIsStreaming(false)
+    setStreamingChatId(null)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -285,8 +309,19 @@ export function ChatPanel() {
       className="h-full flex flex-col rounded-2xl overflow-hidden ring-1 ring-white/[0.08]"
       style={{ background: '#141c2d' }}
     >
+      {/* Streaming in another chat banner */}
+      {isStreaming && streamingChatId && streamingChatId !== activeChatId && (
+        <div
+          className="flex items-center shrink-0 text-xs text-amber-300 bg-amber-500/10 border-b border-amber-500/20"
+          style={{ padding: '8px 20px', gap: 8 }}
+        >
+          <Loader2 size={12} className="animate-spin" />
+          A response is being generated in another chat. Please wait for it to finish.
+        </div>
+      )}
+
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0">
         {!activeChat || activeChat.messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full" style={{ gap: 24 }}>
             <div

@@ -1,10 +1,10 @@
 [package]
-name = "local-ai-chat"
+name = "innertalk-ai"
 version = "0.1.0"
-description = "A local AI chat application"
+description = "A private, offline AI chat app powered by Ollama"
 authors = ["JoFaTech2508"]
-license = ""
-repository = ""
+license = "MIT"
+repository = "https://github.com/JoFaTech2508/innertalk-ai"
 edition = "2021"
 rust-version = "1.77.2"
 
