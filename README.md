@@ -51,4 +51,4 @@
   Built with <a href="https://v2.tauri.app">Tauri</a>, <a href="https://react.dev">React</a>, and <a href="https://ollama.com">Ollama</a>
 </p>
 
-<p align="center">© 2025 JoFaTech2508</p>
+<p align="center">© 2026 JoFaTech2508</p>
