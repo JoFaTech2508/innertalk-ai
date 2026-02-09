@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { tauriStorage } from '../lib/storage'
 
 export interface Attachment {
   name: string
@@ -121,15 +122,14 @@ export const useChatStore = create<ChatState>()(
       updateChatModel: (chatId: string, model: string) => {
         set(state => ({
           chats: state.chats.map(chat =>
-            chat.id === chatId && chat.messages.length === 0
-              ? { ...chat, model }
-              : chat
+            chat.id === chatId ? { ...chat, model } : chat
           ),
         }))
       },
     }),
     {
       name: 'local-ai-chats',
+      storage: createJSONStorage(() => tauriStorage),
       partialize: (state) => ({
         chats: state.chats.map(chat => ({
           ...chat,

@@ -1,4 +1,4 @@
-# Local AI Chat
+# InnerTalk AI
 
 **A private, offline desktop app for chatting with local AI models.**
 Everything runs on your machine — no cloud, no API keys, no data leaving your computer.
@@ -10,7 +10,7 @@ Everything runs on your machine — no cloud, no API keys, no data leaving your 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 <p align="center">
-  <img src="docs/screenshot-chat.png" alt="Local AI Chat" width="800" />
+  <img src="docs/screenshot-chat.png" alt="InnerTalk AI" width="800" />
 </p>
 
 ---
@@ -19,14 +19,15 @@ Everything runs on your machine — no cloud, no API keys, no data leaving your 
 
 - **100% Private** — no cloud, no telemetry, everything runs locally on your Mac
 - **Multiple Models** — browse, download, and switch between AI models with smart RAM-based recommendations
-- **Chat Management** — multiple conversations with full history
-- **File Context** — attach local files and folders for the AI to reference
+- **Chat Management** — multiple conversations with full history, persisted across restarts
+- **File Context** — attach local files and watch folders for the AI to reference
+- **Streaming Responses** — real-time markdown rendering with code block highlighting and copy
 
 ---
 
 ## Installation
 
-1. Download the latest `.dmg` from [Releases](https://github.com/JoFaTech2508/local-ai-chat/releases)
+1. Download the latest `.dmg` from [Releases](https://github.com/JoFaTech2508/innertalk-ai/releases)
 2. Open the `.dmg` and drag the app to Applications
 3. Launch the app — it handles everything else automatically
 
@@ -42,8 +43,8 @@ Everything runs on your machine — no cloud, no API keys, no data leaving your 
 For contributors who want to build from source:
 
 ```bash
-git clone https://github.com/JoFaTech2508/local-ai-chat.git
-cd local-ai-chat
+git clone https://github.com/JoFaTech2508/innertalk-ai.git
+cd innertalk-ai
 npm install
 npm run tauri dev
 ```

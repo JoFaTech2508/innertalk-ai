@@ -309,17 +309,6 @@ export function ChatPanel() {
       className="h-full flex flex-col rounded-2xl overflow-hidden ring-1 ring-white/[0.08]"
       style={{ background: '#141c2d' }}
     >
-      {/* Streaming in another chat banner */}
-      {isStreaming && streamingChatId && streamingChatId !== activeChatId && (
-        <div
-          className="flex items-center shrink-0 text-xs text-amber-300 bg-amber-500/10 border-b border-amber-500/20"
-          style={{ padding: '8px 20px', gap: 8 }}
-        >
-          <Loader2 size={12} className="animate-spin" />
-          A response is being generated in another chat. Please wait for it to finish.
-        </div>
-      )}
-
       {/* Messages */}
       <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0">
         {!activeChat || activeChat.messages.length === 0 ? (
@@ -358,6 +347,16 @@ export function ChatPanel() {
 
       {/* Input */}
       <div className="shrink-0" style={{ padding: '12px 16px 16px 16px' }}>
+        {/* Streaming in another chat banner */}
+        {isStreaming && streamingChatId && streamingChatId !== activeChatId && (
+          <div
+            className="flex items-center text-xs text-amber-300 bg-amber-500/10 rounded-lg ring-1 ring-amber-500/20"
+            style={{ padding: '8px 14px', gap: 8, marginBottom: 8 }}
+          >
+            <Loader2 size={12} className="animate-spin shrink-0" />
+            A response is being generated in another chat. Please wait for it to finish.
+          </div>
+        )}
         {attachments.length > 0 && (
           <div className="flex flex-wrap" style={{ gap: 6, marginBottom: 8, paddingLeft: 4 }}>
             {attachments.map(att => (

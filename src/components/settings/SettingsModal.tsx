@@ -239,9 +239,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </p>
                 <div className="flex items-center" style={{ gap: 8 }}>
                   <button
-                    onClick={() => {
-                      localStorage.removeItem('local-ai-chats')
-                      localStorage.removeItem('local-ai-settings')
+                    onClick={async () => {
+                      const { invoke } = await import('@tauri-apps/api/core')
+                      await invoke('save_store', { key: 'local-ai-chats', value: '{}' }).catch(() => {})
+                      await invoke('save_store', { key: 'local-ai-settings', value: '{}' }).catch(() => {})
                       window.location.reload()
                     }}
                     className="flex items-center rounded-lg bg-red-500/20 text-red-300 text-xs font-semibold hover:bg-red-500/30 transition-colors"

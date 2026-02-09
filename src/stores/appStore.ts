@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { tauriStorage } from '../lib/storage'
 
 export type Tab = 'chat' | 'files' | 'settings'
 export type SidebarTab = 'chats' | 'files'
@@ -79,6 +80,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'local-ai-settings',
+      storage: createJSONStorage(() => tauriStorage),
       partialize: (state) => ({
         selectedModel: state.selectedModel,
         sidebarCollapsed: state.sidebarCollapsed,

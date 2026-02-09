@@ -1,5 +1,6 @@
 mod ollama;
 mod sidecar;
+mod storage;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -49,6 +50,8 @@ pub fn run() {
             ollama::watch_folder,
             ollama::unwatch_folder,
             sidecar::restart_ollama,
+            storage::save_store,
+            storage::load_store,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

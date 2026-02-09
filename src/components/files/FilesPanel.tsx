@@ -58,9 +58,14 @@ export function FilesPanel({ embedded }: FilesPanelProps) {
   foldersRef.current = contextFolders
 
   useEffect(() => {
-    // Start watching all current folders
+    // Start watching all current folders + re-read persisted ones with empty files
     for (const folder of contextFolders) {
       watchFolder(folder.path).catch(() => {})
+      if (folder.files.length === 0) {
+        readFolderFiles(folder.path)
+          .then(files => useAppStore.getState().updateContextFolder(folder.id, files))
+          .catch(() => {})
+      }
     }
 
     // Listen for change events from the native watcher
