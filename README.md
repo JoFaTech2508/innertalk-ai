@@ -1,27 +1,36 @@
-# InnerTalk AI
+<p align="center">
+  <img src="docs/app-icon-V2.png" alt="InnerTalk AI" width="128" />
+</p>
 
-**A private, offline desktop app for chatting with local AI models.**
-Everything runs on your machine — no cloud, no API keys, no data leaving your computer.
-
-![macOS](https://img.shields.io/badge/macOS-12%2B-blue?style=flat-square&logo=apple)
-![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri)
-![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+<h1 align="center">InnerTalk AI</h1>
 
 <p align="center">
-  <img src="docs/screenshot-chat.png" alt="InnerTalk AI" width="800" />
+  A private, offline desktop app for chatting with local AI models.<br>
+  Powered by <a href="https://ollama.com">Ollama</a> — no setup, no cloud, no API keys.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-12%2B-blue?style=flat-square&logo=apple" alt="macOS" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-chat.png" alt="InnerTalk AI - Chat" width="800" style="border-radius: 12px;" />
 </p>
 
 ---
 
 ## Features
 
-- **100% Private** — no cloud, no telemetry, everything runs locally on your Mac
-- **Multiple Models** — browse, download, and switch between AI models with smart RAM-based recommendations
-- **Chat Management** — multiple conversations with full history, persisted across restarts
-- **File Context** — attach local files and watch folders for the AI to reference
-- **Streaming Responses** — real-time markdown rendering with code block highlighting and copy
+- **100% Private** — everything runs locally, no cloud
+- **Multiple Models** — download and switch between models
+- **Chat History** — conversations persist across restarts
+- **File Context** — attach files and folders as context
+- **Streaming** — real-time responses with markdown and code blocks
+
+<p align="center">
+  <img src="docs/screenshot-settings.png" alt="InnerTalk AI - Settings" width="800" style="border-radius: 12px;" />
+</p>
 
 ---
 
@@ -29,7 +38,7 @@ Everything runs on your machine — no cloud, no API keys, no data leaving your 
 
 1. Download the latest `.dmg` from [Releases](https://github.com/JoFaTech2508/innertalk-ai/releases)
 2. Open the `.dmg` and drag the app to Applications
-3. Launch the app — it handles everything else automatically
+3. Launch the app — Ollama is bundled, no separate install needed
 
 ### Requirements
 
@@ -38,19 +47,8 @@ Everything runs on your machine — no cloud, no API keys, no data leaving your 
 
 ---
 
-## Development
+<p align="center">
+  Built with <a href="https://v2.tauri.app">Tauri</a>, <a href="https://react.dev">React</a>, and <a href="https://ollama.com">Ollama</a>
+</p>
 
-For contributors who want to build from source:
-
-```bash
-git clone https://github.com/JoFaTech2508/innertalk-ai.git
-cd innertalk-ai
-npm install
-npm run tauri dev
-```
-
-Requires [Node.js](https://nodejs.org/) 18+ and [Rust](https://rustup.rs/) (latest stable).
-
----
-
-© 2025 JoFaTech2508
+<p align="center">© 2025 JoFaTech2508</p>
