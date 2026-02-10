@@ -49,16 +49,27 @@ pub fn stop_ollama(app: &tauri::AppHandle) {
             if let Some(mut child) = guard.take() {
                 let pid = child.id();
                 log::info!("Stopping Ollama process (pid: {})", pid);
-                let _ = child.kill();
-                let _ = child.wait();
-                // Also kill any runner child processes spawned by this Ollama
+                // Kill child processes first, then the main process
                 #[cfg(unix)]
                 {
                     let _ = Command::new("pkill")
-                        .args(["-P", &pid.to_string()])
+                        .args(["-9", "-P", &pid.to_string()])
                         .output();
                 }
+                let _ = child.kill();
+                let _ = child.wait();
             }
+        }
+    }
+    // Also kill any remaining ollama processes started by this app
+    #[cfg(unix)]
+    {
+        if let Ok(resource_dir) = app.path().resource_dir() {
+            let ollama_bin = resource_dir.join("resources").join("ollama").join("ollama");
+            let bin_str = ollama_bin.to_string_lossy();
+            let _ = Command::new("pkill")
+                .args(["-9", "-f", &bin_str])
+                .output();
         }
     }
 }

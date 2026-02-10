@@ -56,8 +56,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if let RunEvent::Exit = event {
-                sidecar::stop_ollama(app_handle);
+            match event {
+                RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+                    sidecar::stop_ollama(app_handle);
+                }
+                _ => {}
             }
         });
 }
