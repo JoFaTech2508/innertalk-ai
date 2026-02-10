@@ -241,8 +241,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   <button
                     onClick={async () => {
                       const { invoke } = await import('@tauri-apps/api/core')
-                      await invoke('save_store', { key: 'local-ai-chats', value: '{}' }).catch(() => {})
-                      await invoke('save_store', { key: 'local-ai-settings', value: '{}' }).catch(() => {})
+                      await invoke('save_store', { key: 'innertalk-chats', value: '{}' }).catch(() => {})
+                      await invoke('save_store', { key: 'innertalk-settings', value: '{}' }).catch(() => {})
                       window.location.reload()
                     }}
                     className="flex items-center rounded-lg bg-red-500/20 text-red-300 text-xs font-semibold hover:bg-red-500/30 transition-colors"

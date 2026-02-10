@@ -79,7 +79,7 @@ export const useAppStore = create<AppState>()(
       setPullError: (error) => set({ pullError: error }),
     }),
     {
-      name: 'local-ai-settings',
+      name: 'innertalk-settings',
       storage: createJSONStorage(() => tauriStorage),
       partialize: (state) => ({
         selectedModel: state.selectedModel,

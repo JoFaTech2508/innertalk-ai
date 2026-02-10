@@ -128,7 +128,7 @@ export const useChatStore = create<ChatState>()(
       },
     }),
     {
-      name: 'local-ai-chats',
+      name: 'innertalk-chats',
       storage: createJSONStorage(() => tauriStorage),
       partialize: (state) => ({
         chats: state.chats.map(chat => ({
