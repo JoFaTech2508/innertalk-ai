@@ -38,7 +38,11 @@
 
 1. Download the latest `.dmg` from [Releases](https://github.com/JoFaTech2508/innertalk-ai/releases)
 2. Open the `.dmg` and drag the app to Applications
-3. Launch the app — Ollama is bundled, no separate install needed
+3. If macOS says the app is "damaged", run this in Terminal:
+   ```bash
+   xattr -cr /Applications/InnerTalk\ AI.app
+   ```
+4. Launch the app — Ollama is bundled, no separate install needed
 
 ### Requirements
 
